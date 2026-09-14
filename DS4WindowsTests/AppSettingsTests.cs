@@ -132,8 +132,9 @@ namespace DS4WindowsTests
             dto.MapTo(tempStore);
 
             // Check settings
-            DateTime.TryParse(dto.LastCheckString, out DateTime tempLastChecked);
-            Assert.AreEqual(tempLastChecked, tempStore.lastChecked);
+            // The saved legacy date is month/day/year, independent of the
+            // machine's current culture. Do not reparse the expected value.
+            Assert.AreEqual(new DateTime(2023, 12, 5, 0, 24, 15), tempStore.lastChecked);
         }
 
         [TestMethod]
