@@ -15,6 +15,8 @@ public sealed class PortableUpdaterBootstrapTests
     [DataTestMethod]
     [DataRow("v2.0.4")]
     [DataRow("v2.0.3")]
+    [DataRow("v2.0.5")]
+    [DataRow("v2.0.6")]
     public void OldUnsafeUpdaterIsNeverAccepted(string tag)
     {
         using var json = Release(tag);
@@ -29,6 +31,17 @@ public sealed class PortableUpdaterBootstrapTests
         Assert.AreEqual(PortableUpdaterBootstrap.MinimumVersion, asset.Version);
         Assert.AreEqual(new string('a', 64), asset.Sha256);
         Assert.AreEqual(72L, asset.Size);
+    }
+
+    [DataTestMethod]
+    [DataRow("v2.0.8")]
+    [DataRow("v2.1.0")]
+    [DataRow("v3.0.0")]
+    public void FutureVerifiedUpdaterVersionsRemainEligible(string tag)
+    {
+        using var json = Release(tag);
+        var asset = PortableUpdaterBootstrap.ReadVerifiedAsset(json.RootElement);
+        Assert.IsTrue(asset.Version > PortableUpdaterBootstrap.MinimumVersion);
     }
 
     [DataTestMethod]
@@ -213,7 +226,7 @@ public sealed class PortableUpdaterBootstrapTests
         }
     }
 
-    private static JsonDocument Release(string tag = "v2.0.5", string fault = null)
+    private static JsonDocument Release(string tag = "v2.0.7", string fault = null)
     {
         var asset = new
         {

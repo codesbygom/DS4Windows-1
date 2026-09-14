@@ -22,7 +22,10 @@ internal sealed record PortableUpdaterTicket(string Root, string FilePath,
 /// </summary>
 internal static class PortableUpdaterBootstrap
 {
-    internal static readonly Version MinimumVersion = new(2, 0, 5, 0);
+    // 2.0.7 preserves custom apphost names transactionally and knows the
+    // target-version boundary for custom-only package ownership. Newer
+    // verified releases remain eligible; this is not an exact-version pin.
+    internal static readonly Version MinimumVersion = new(2, 0, 7, 0);
     internal const long MaximumUpdaterBytes = 128L * 1024 * 1024;
     internal const string ReleaseApi = "https://api.github.com/repos/hbashton/DS4Updater/releases/latest";
 
@@ -98,7 +101,7 @@ internal static class PortableUpdaterBootstrap
             throw new InvalidDataException("The updater release version is invalid.");
         Version version = NormalizeVersion(parsed);
         if (version < MinimumVersion)
-            throw new InvalidOperationException("Portable updates require DS4Updater 2.0.5 or newer. Until that updater is published, download the portable ZIP and extract it into a new folder.");
+            throw new InvalidOperationException("Portable updates require DS4Updater 2.0.7 or newer. Download the latest updater, or extract the complete portable ZIP into a new folder.");
         string expectedUrl = $"https://github.com/hbashton/DS4Updater/releases/download/{tag}/DS4Updater.exe";
         if (!release.TryGetProperty("assets", out var assets) || assets.ValueKind != JsonValueKind.Array)
             throw new InvalidDataException("The updater release contains no download assets.");
