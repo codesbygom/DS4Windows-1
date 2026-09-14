@@ -370,8 +370,9 @@ namespace DS4Windows.SetupActions
         private static int UninstallLocked(string installRoot)
         {
             StopManagedProcesses(installRoot);
-            RemoveOwnedTask("RunVIIPER", Path.Combine(installRoot, "VIIPER", "viiper.exe"));
-            RemoveOwnedTask("RunDS4Windows", Path.Combine(installRoot, "DS4Windows.exe"));
+            RemoveOwnedTask("RunVIIPER", Path.Combine(installRoot, "VIIPER", "viiper.exe"),
+                Installation.InstallerStartupTaskPolicy.ViiperArguments);
+            RemoveOwnedTask("RunDS4Windows", Path.Combine(installRoot, "DS4Windows.exe"), "-m");
             RemoveObsoleteBundledViiperPayloads(installRoot,
                 preserveCurrent: false);
 
@@ -997,7 +998,7 @@ namespace DS4Windows.SetupActions
             }
         }
 
-        private static void RemoveOwnedTask(string taskName, string expectedExecutable)
+        private static void RemoveOwnedTask(string taskName, string expectedExecutable, string expectedArguments)
         {
             var query = RunCaptured(SystemTool("schtasks.exe"), "/Query /TN " + Quote(taskName) + " /XML", TimeSpan.FromSeconds(10), out var output);
             if (query != 0)
@@ -1005,23 +1006,20 @@ namespace DS4Windows.SetupActions
                 return;
             }
 
-            try
+            if (!Installation.InstallerStartupTaskPolicy.IsManaged(output,
+                    expectedExecutable, expectedArguments))
             {
-                var document = new XmlDocument { XmlResolver = null };
-                document.LoadXml(output.Trim());
-                var command = document.SelectSingleNode(
-                    "//*[local-name()='Exec']/*[local-name()='Command']")?
-                    .InnerText?.Trim();
-                if (!PathsEqual(expectedExecutable, command)) return;
-            }
-            catch
-            {
-                // Never delete a task whose action could not be parsed and
-                // compared exactly to the installer-owned executable.
+                WriteFallbackLog("Preserved unowned or unverified startup task: " + taskName);
                 return;
             }
-
-            RunHidden(SystemTool("schtasks.exe"), "/Delete /TN " + Quote(taskName) + " /F", TimeSpan.FromSeconds(10));
+            // Recheck immediately before deleting a fixed name. A replacement
+            // between inventory and cleanup is not permission to remove it.
+            if (RunCaptured(SystemTool("schtasks.exe"), "/Query /TN " + Quote(taskName) + " /XML",
+                    TimeSpan.FromSeconds(10), out var current) != 0 ||
+                !string.Equals(output, current, StringComparison.Ordinal))
+                throw new InvalidOperationException("Startup task changed during uninstall; preserved: " + taskName);
+            if (RunHidden(SystemTool("schtasks.exe"), "/Delete /TN " + Quote(taskName) + " /F", TimeSpan.FromSeconds(10)) != 0)
+                throw new IOException("Windows could not remove the verified startup task: " + taskName);
         }
 
         private static int RunHidden(string fileName, string arguments, TimeSpan timeout)

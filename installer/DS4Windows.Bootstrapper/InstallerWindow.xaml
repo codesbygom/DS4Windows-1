@@ -122,6 +122,7 @@
             </Border>
 
             <TextBlock Text="Installs to C:\Program Files\DS4Windows. Profiles, settings, logs, and user-created files are preserved during updates and repairs." TextWrapping="Wrap" Foreground="{DynamicResource MutedBrush}" FontSize="12" />
+            <TextBlock Text="Setup repairs the reserved RunVIIPER and RunDS4Windows startup tasks after backing up any existing definitions." TextWrapping="Wrap" Foreground="{DynamicResource MutedBrush}" FontSize="12" Margin="0,7,0,0" />
           </StackPanel>
         </ScrollViewer>
         <Grid Grid.Row="1" Margin="0,20,0,0">
@@ -147,7 +148,7 @@
         <StackPanel VerticalAlignment="Center" HorizontalAlignment="Stretch">
           <Border Width="64" Height="64" CornerRadius="32" Background="#2532B67A" HorizontalAlignment="Center"><TextBlock Text="✓" FontSize="34" Foreground="{StaticResource SuccessBrush}" HorizontalAlignment="Center" VerticalAlignment="Center" /></Border>
           <TextBlock x:Name="CompleteTitle" Text="DS4Windows is ready" FontSize="25" FontWeight="SemiBold" HorizontalAlignment="Center" Margin="0,20,0,0" />
-          <TextBlock x:Name="CompleteDescription" Text="Installation and verification completed successfully." TextAlignment="Center" Foreground="{DynamicResource MutedBrush}" HorizontalAlignment="Center" Margin="0,8,0,22" />
+          <TextBlock x:Name="CompleteDescription" Text="Installation and verification completed successfully." TextWrapping="Wrap" MaxWidth="530" TextAlignment="Center" Foreground="{DynamicResource MutedBrush}" HorizontalAlignment="Center" Margin="0,8,0,22" />
           <CheckBox x:Name="LaunchCheckBox" IsChecked="True" Content="Launch DS4Windows" HorizontalAlignment="Center" />
           <Button Style="{StaticResource PrimaryButton}" Content="Finish" Width="130" HorizontalAlignment="Center" Margin="0,20,0,0" Click="Finish_Click" />
         </StackPanel>

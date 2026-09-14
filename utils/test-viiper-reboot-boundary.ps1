@@ -112,6 +112,12 @@ try {
         param($registered, [string]$taskName)
         return $null -ne $registered
     }
+    function Save-ManagedStartupTaskBackup {
+        param($registered, [string]$taskName, [switch]$IncludeMarked)
+        if (-not $registered -or -not $IncludeMarked) {
+            throw "Reboot containment must preserve the marked task before disabling it."
+        }
+    }
     function Test-HighestLogonTaskDefinition {
         return $true
     }
@@ -234,7 +240,7 @@ try {
 
     $backendText = Get-Content -LiteralPath $backendPath -Raw
     if ([regex]::Matches($backendText,
-            'Suspend-StartupTasksUntilInfrastructureReady').Count -lt 3) {
+            'Suspend-StartupTasksForSetup').Count -lt 3) {
         throw "Both reboot-pending branches must suspend startup tasks."
     }
 

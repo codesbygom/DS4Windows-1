@@ -46,6 +46,9 @@ $script:CorrelationId = if ([string]::IsNullOrWhiteSpace($CorrelationId) -or
 }
 else { $CorrelationId.Trim().ToLowerInvariant() }
 $script:RunAtStartupEnabled = -not [bool]$SkipStartupTasks
+$script:RequestedRunAtStartupEnabled = $script:RunAtStartupEnabled
+$script:StartupTaskFallbackActive = $false
+$script:StartupTaskWarning = ""
 if ($env:DS4W_SETUP_PORTABLE_INSTALLATION -eq '1') {
     $script:KeepDs4WindowsPortable = $true
 }
@@ -943,8 +946,22 @@ function Remove-MismatchedUsbipPackage($entry, [Version]$installedVersion,
 
 function Disable-ViiperStartup {
     $managedViiperPath = Join-Path $script:InstallDir "viiper.exe"
-    [void](Remove-ManagedStartupTask "RunVIIPER" $managedViiperPath `
-        $script:ViiperServerArguments $script:InstallDir)
+    try {
+        $task = Get-RootScheduledTask "RunVIIPER"
+        if ($task -and (Test-ManagedStartupTaskOwnership $task "RunVIIPER" `
+                $managedViiperPath $script:ViiperServerArguments $script:InstallDir)) {
+            [void](Remove-ManagedStartupTask "RunVIIPER" $managedViiperPath `
+                $script:ViiperServerArguments $script:InstallDir)
+        }
+        # An unowned reserved task is left for Configure's explicit, backed-up
+        # replacement; strict pre-install cleanup must not bypass that recovery.
+    }
+    catch {
+        # Startup registration is optional; driver/payload failures below are
+        # not. A refused cleanup must not abort an otherwise usable install.
+        Enter-StartupTaskFallback "preparing VIIPER startup" $_.Exception.Message `
+            $managedViiperPath $script:Ds4WindowsRestartPath
+    }
     try {
         Remove-ItemProperty `
             -LiteralPath $script:TargetRunKeyPath `
@@ -1737,9 +1754,15 @@ function Test-ViiperApi([int]$timeoutMilliseconds = 1000) {
     finally { if ($client) { $client.Dispose() } }
 }
 
-function Start-AndVerifyViiper([string]$taskName) {
+function Start-AndVerifyViiper([string]$taskName, [string]$viiperPath) {
     if (Test-ViiperApi) { return $true }
     try {
+        $task = Get-RootScheduledTask $taskName
+        if (-not (Test-ManagedStartupTaskMarker $task) -or
+                -not (Test-HighestLogonTaskDefinition $task $viiperPath `
+                    $script:ViiperServerArguments (Split-Path -Parent $viiperPath))) {
+            throw "VIIPER startup task is not a verified managed definition."
+        }
         Start-ScheduledTask -TaskPath "\" -TaskName $taskName `
             -ErrorAction Stop
     }
@@ -1822,6 +1845,31 @@ function Get-RootScheduledTask([string]$taskName) {
     return $matches | Select-Object -First 1
 }
 
+function Test-TaskPrincipalEnumValue($value, [string]$kind) {
+    # ScheduledTasks' types.ps1xml adapts these CIM Int32 values to generated
+    # enums. Accept both documented representations without coercing bools,
+    # floating point values, numeric strings, arrays, or other enum types.
+    if ($kind -eq "RunLevel") { $expectedName = "Highest"; $expectedNumber = 1 }
+    elseif ($kind -eq "LogonType") { $expectedName = "Interactive"; $expectedNumber = 3 }
+    else { return $false }
+    if ($value -is [string]) {
+        return [string]::Equals($value, $expectedName, [StringComparison]::Ordinal)
+    }
+    if ($null -eq $value) { return $false }
+    $typeName = $value.GetType().FullName
+    if ($value -is [Enum]) {
+        if ($typeName -cne "Microsoft.PowerShell.Cmdletization.GeneratedTypes.ScheduledTask.$($kind)Enum") {
+            return $false
+        }
+    }
+    elseif ($typeName -notin @("System.Byte", "System.SByte", "System.Int16", "System.UInt16",
+            "System.Int32", "System.UInt32", "System.Int64", "System.UInt64")) {
+        return $false
+    }
+    try { return [Convert]::ToInt64($value) -eq $expectedNumber }
+    catch { return $false }
+}
+
 function Test-HighestLogonTaskDefinition($registered,
         [string]$executablePath, [string]$arguments,
         [string]$workingDirectory, [bool]$requireEnabled = $true,
@@ -1851,6 +1899,7 @@ function Test-HighestLogonTaskDefinition($registered,
             if ($_.CimClass.CimClassName -ne 'MSFT_TaskLogonTrigger') {
                 return $false
             }
+            if ($requireEnabled -and -not $_.Enabled) { return $false }
             # A user-neutral logon trigger avoids Task Scheduler's ambiguous
             # UserId name resolution. The exact principal still restricts
             # execution to the intended user's interactive token.
@@ -1872,8 +1921,8 @@ function Test-HighestLogonTaskDefinition($registered,
             [string]::Equals($actualWorkingDirectory,
                 $expectedWorkingDirectory,
                 [StringComparison]::OrdinalIgnoreCase) -and
-            $registered.Principal.RunLevel -eq 'Highest' -and
-            $registered.Principal.LogonType -eq 'Interactive' -and
+            (Test-TaskPrincipalEnumValue $registered.Principal.RunLevel "RunLevel") -and
+            (Test-TaskPrincipalEnumValue $registered.Principal.LogonType "LogonType") -and
             $principalSid -eq $script:TargetUserSid -and $matchingTrigger
     }
     catch { return $false }
@@ -1885,6 +1934,52 @@ function Test-HighestLogonTask([string]$taskName,
     $registered = Get-RootScheduledTask $taskName
     return Test-HighestLogonTaskDefinition $registered $executablePath `
         $arguments $workingDirectory $requireEnabled
+}
+
+function Get-StartupTaskVerificationDetails($task, [string]$executablePath,
+        [string]$arguments, [string]$workingDirectory) {
+    if (-not $task) { return "task absent after registration" }
+    try {
+        $action = @($task.Actions) | Select-Object -First 1
+        $trigger = @($task.Triggers) | Select-Object -First 1
+        $principal = [string]$task.Principal.UserId
+        $triggerUser = [string]$trigger.UserId
+        $pathMatches = $false
+        $directoryMatches = $false
+        try {
+            $pathMatches = [string]::Equals([IO.Path]::GetFullPath([string]$action.Execute),
+                [IO.Path]::GetFullPath($executablePath), [StringComparison]::OrdinalIgnoreCase)
+            $directoryMatches = [string]::Equals(
+                [IO.Path]::GetFullPath([string]$action.WorkingDirectory).TrimEnd('\'),
+                [IO.Path]::GetFullPath($workingDirectory).TrimEnd('\'),
+                [StringComparison]::OrdinalIgnoreCase)
+        }
+        catch { }
+        # Report field comparisons rather than XML or action arguments, which
+        # may contain private data if another writer changed the definition.
+        return ([ordered]@{
+            actionCount = @($task.Actions).Count
+            triggerCount = @($task.Triggers).Count
+            enabled = [bool]$task.Settings.Enabled
+            priority = $task.Settings.Priority
+            principalIdentity = $principal
+            principalSid = Convert-AccountToSid $principal
+            expectedSid = $script:TargetUserSid
+            runLevel = [string]$task.Principal.RunLevel
+            logonType = [string]$task.Principal.LogonType
+            triggerType = [string]$trigger.CimClass.CimClassName
+            triggerEnabled = [bool]$trigger.Enabled
+            triggerIdentity = $triggerUser
+            triggerSid = Convert-AccountToSid $triggerUser
+            neutralTrigger = [string]::IsNullOrWhiteSpace($triggerUser)
+            executableMatches = $pathMatches
+            argumentsMatch = [string]::Equals(([string]$action.Arguments).Trim(),
+                ([string]$arguments).Trim(), [StringComparison]::Ordinal)
+            workingDirectoryMatches = $directoryMatches
+            ownershipMarker = Test-ManagedStartupTaskMarker $task
+        } | ConvertTo-Json -Compress)
+    }
+    catch { return "task field inspection failed: $($_.Exception.Message)" }
 }
 
 function Test-ManagedStartupTaskMarker($registered) {
@@ -2051,8 +2146,10 @@ function Write-StartupTaskBackup([string]$taskName, [string]$taskXml) {
     Write-SetupLog "Preserved previous startup task '$taskName': $backupPath" Green
 }
 
-function Save-ManagedStartupTaskBackup($registered, [string]$taskName) {
-    if (-not $registered -or (Test-ManagedStartupTaskMarker $registered)) {
+function Save-ManagedStartupTaskBackup($registered, [string]$taskName,
+        [switch]$IncludeMarked) {
+    if (-not $registered -or (-not $IncludeMarked -and
+            (Test-ManagedStartupTaskMarker $registered))) {
         return
     }
     # Called only after ownership validation and before the first mutation.
@@ -2064,16 +2161,24 @@ function Save-ManagedStartupTaskBackup($registered, [string]$taskName) {
 function Assert-StartupTaskMutationAllowed([string]$taskName,
         [string]$legacyExecutablePath = $null,
         [string]$legacyArguments = $null,
-        [string]$legacyWorkingDirectory = $null) {
+        [string]$legacyWorkingDirectory = $null,
+        [switch]$ReclaimExisting) {
     $registered = Get-RootScheduledTask $taskName
-    if ($registered -and -not (Test-ManagedStartupTaskOwnership `
+    if ($registered -and -not $ReclaimExisting -and -not (Test-ManagedStartupTaskOwnership `
             $registered $taskName $legacyExecutablePath $legacyArguments `
             $legacyWorkingDirectory)) {
         throw "Refusing to overwrite, disable, or remove foreign root task " +
             "'$taskName'. Rename or remove that task manually, then rerun " +
             "Install / Repair."
     }
-    Save-ManagedStartupTaskBackup $registered $taskName
+    # Installer-only reclamation is bounded by the same two-name allowlist.
+    # Every replaced definition, including marked tasks, is archived first.
+    if ($ReclaimExisting -and (Test-ManagedStartupTaskMarker $registered) -and
+            (Test-HighestLogonTaskDefinition $registered $legacyExecutablePath `
+                $legacyArguments $legacyWorkingDirectory)) {
+        return $registered
+    }
+    Save-ManagedStartupTaskBackup $registered $taskName -IncludeMarked:$ReclaimExisting
     return $registered
 }
 
@@ -2214,10 +2319,10 @@ function New-HighestLogonTaskXml([string]$executablePath,
 
 function Register-HighestLogonTask([string]$taskName,
         [string]$executablePath, [string]$arguments,
-        [string]$workingDirectory) {
+        [string]$workingDirectory, [switch]$ReclaimExisting) {
     Assert-ManagedStartupTaskName $taskName
     $registeredBefore = Assert-StartupTaskMutationAllowed $taskName `
-        $executablePath $arguments $workingDirectory
+        $executablePath $arguments $workingDirectory -ReclaimExisting:$ReclaimExisting
     if ($registeredBefore -and
             (Test-ManagedStartupTaskMarker $registeredBefore) -and
             (Test-HighestLogonTaskDefinition $registeredBefore `
@@ -2234,6 +2339,11 @@ function Register-HighestLogonTask([string]$taskName,
             $workingDirectory
 
         $registrationStage = "register exact-SID task XML"
+        # Re-read and back up immediately before update, so a task changed
+        # since pair preflight cannot be overwritten using an older backup.
+        $current = Assert-StartupTaskMutationAllowed $taskName `
+            $executablePath $arguments $workingDirectory -ReclaimExisting:$ReclaimExisting
+        $replaceExisting = [bool]$current
         $registerParameters = @{
             TaskPath = "\"
             TaskName = $taskName
@@ -2248,7 +2358,9 @@ function Register-HighestLogonTask([string]$taskName,
         if (-not (Test-ManagedStartupTaskMarker $registeredAfter) -or
                 -not (Test-HighestLogonTaskDefinition $registeredAfter `
                     $executablePath $arguments $workingDirectory $true)) {
-            throw "Task registration verification failed."
+            throw ("Task registration verification failed: " +
+                (Get-StartupTaskVerificationDetails $registeredAfter `
+                    $executablePath $arguments $workingDirectory))
         }
         Write-SetupLog (
             "Verified startup task '$taskName' on registration attempt " +
@@ -2270,6 +2382,11 @@ function Register-HighestLogonTask([string]$taskName,
         if ($observed -and -not (Test-ManagedStartupTaskOwnership `
                 $observed $taskName $executablePath $arguments `
                 $workingDirectory)) {
+            if ($ReclaimExisting -and $attempt -lt 3) {
+                # The next bounded attempt must back up this new definition
+                # before it may use replacement registration.
+                continue
+            }
             throw "Startup task '$taskName' became a foreign same-name " +
                 "collision during registration. It was left unchanged."
         }
@@ -2297,33 +2414,35 @@ function Register-HighestLogonTask([string]$taskName,
     return $false
 }
 
-function Register-ViiperRunTask([string]$viiperPath, [string]$taskName) {
+function Register-ViiperRunTask([string]$viiperPath, [string]$taskName,
+        [switch]$ReclaimExisting) {
     return Register-HighestLogonTask $taskName $viiperPath `
         $script:ViiperServerArguments `
-        (Split-Path -Parent $viiperPath)
+        (Split-Path -Parent $viiperPath) -ReclaimExisting:$ReclaimExisting
 }
 
-function Register-Ds4WindowsRunTask([string]$ds4WindowsPath) {
+function Register-Ds4WindowsRunTask([string]$ds4WindowsPath,
+        [switch]$ReclaimExisting) {
     return Register-HighestLogonTask "RunDS4Windows" $ds4WindowsPath "-m" `
-        (Split-Path -Parent $ds4WindowsPath)
+        (Split-Path -Parent $ds4WindowsPath) -ReclaimExisting:$ReclaimExisting
 }
 
 function Register-ManagedStartupTaskPair([string]$viiperPath,
         [string]$ds4WindowsPath) {
-    # Detect either fixed-name collision before registering the first task.
-    # A foreign RunDS4Windows task must not cause a newly created RunVIIPER
-    # task to appear and then require rollback.
+    # These two original names are reserved for DS4Windows setup. Explicit
+    # installer reclamation backs up both definitions before any replacement;
+    # ordinary runtime/remove/disable paths still require verified ownership.
     $viiperBefore = Assert-StartupTaskMutationAllowed "RunVIIPER" `
         $viiperPath $script:ViiperServerArguments `
-        (Split-Path -Parent $viiperPath)
+        (Split-Path -Parent $viiperPath) -ReclaimExisting
     [void](Assert-StartupTaskMutationAllowed "RunDS4Windows" `
-        $ds4WindowsPath "-m" (Split-Path -Parent $ds4WindowsPath))
+        $ds4WindowsPath "-m" (Split-Path -Parent $ds4WindowsPath) -ReclaimExisting)
 
-    if (-not (Register-ViiperRunTask $viiperPath "RunVIIPER")) {
+    if (-not (Register-ViiperRunTask $viiperPath "RunVIIPER" -ReclaimExisting)) {
         throw "Could not create the elevated RunVIIPER startup task."
     }
     try {
-        if (-not (Register-Ds4WindowsRunTask $ds4WindowsPath)) {
+        if (-not (Register-Ds4WindowsRunTask $ds4WindowsPath -ReclaimExisting)) {
             throw "Could not register the elevated RunDS4Windows startup task."
         }
     }
@@ -2414,9 +2533,7 @@ function Set-InfrastructureStartupFailClosed(
             # The durable marker is sufficient ownership for containment even
             # if a failed -Force update left an action that no longer passes
             # the full expected contract.
-            if ([string]::IsNullOrWhiteSpace([string]$registered.Description)) {
-                Save-ManagedStartupTaskBackup $registered $taskName
-            }
+            Save-ManagedStartupTaskBackup $registered $taskName -IncludeMarked
             Disable-ScheduledTask -TaskPath "\" -TaskName $taskName `
                 -ErrorAction Stop | Out-Null
             $observed = Get-RootScheduledTask $taskName
@@ -2442,6 +2559,139 @@ function Set-InfrastructureStartupFailClosed(
             ) Red
         }
     }
+}
+
+function Set-StartupTaskWarning([string]$message) {
+    $script:StartupTaskWarning = $message
+    try {
+        Set-ItemProperty -LiteralPath $script:InfrastructureRegistryPath `
+            -Name "StartupTaskWarning" -Value $message -Type String -ErrorAction Stop
+        $warningCorrelation = if ([string]::IsNullOrWhiteSpace($message)) { "" } else {
+            $script:CorrelationId
+        }
+        Set-ItemProperty -LiteralPath $script:InfrastructureRegistryPath `
+            -Name "StartupTaskWarningCorrelationId" -Value $warningCorrelation `
+            -Type String -ErrorAction Stop
+    }
+    catch {
+        Write-SetupLog ("Could not persist the startup warning: " + $_.Exception.Message) Yellow
+    }
+}
+
+function Enter-StartupTaskFallback([string]$stage, [string]$failure,
+        [string]$viiperPath, [string]$ds4WindowsPath) {
+    $script:StartupTaskFallbackActive = $true
+    # This controls only this setup invocation. The user's saved preference
+    # remains unchanged, and a later Repair can restore automatic startup.
+    $script:RunAtStartupEnabled = $false
+    $warning = "Automatic startup could not be configured while $stage. " +
+        "Setup will continue using direct launch after driver verification. " +
+        "Run Repair later to retry automatic startup. Details: $failure"
+    Write-SetupLog $warning Yellow
+    Set-StartupTaskWarning $warning
+    if (-not [string]::IsNullOrWhiteSpace($viiperPath) -and
+            -not [string]::IsNullOrWhiteSpace($ds4WindowsPath)) {
+        try { Set-InfrastructureStartupFailClosed $viiperPath $ds4WindowsPath }
+        catch { Write-SetupLog ("Startup containment could not finish: " + $_.Exception.Message) Yellow }
+    }
+}
+
+function Configure-StartupTasksForSetup([string]$viiperPath,
+        [string]$ds4WindowsPath) {
+    Set-StartupTaskWarning ""
+    $script:StartupTaskFallbackActive = $false
+    $script:RunAtStartupEnabled = $script:RequestedRunAtStartupEnabled
+    try {
+        if ($script:RunAtStartupEnabled) {
+            [void](Register-ManagedStartupTaskPair $viiperPath $ds4WindowsPath)
+            Write-SetupLog "Registered and verified elevated RunVIIPER and RunDS4Windows startup tasks." Green
+        }
+        else {
+            Remove-ManagedStartupTaskPair $viiperPath $ds4WindowsPath
+            Write-SetupLog "Run at Startup is disabled; one-time launch only." Green
+        }
+    }
+    catch {
+        Enter-StartupTaskFallback "configuring scheduled tasks" $_.Exception.Message `
+            $viiperPath $ds4WindowsPath
+    }
+}
+
+function Confirm-StartupTasksForSetup([string]$viiperPath,
+        [string]$ds4WindowsPath) {
+    if ($script:StartupTaskFallbackActive) { return }
+    try {
+        if ($script:RunAtStartupEnabled) {
+            foreach ($contract in @(
+                    @("RunVIIPER", $viiperPath, $script:ViiperServerArguments),
+                    @("RunDS4Windows", $ds4WindowsPath, "-m"))) {
+                $task = Get-RootScheduledTask $contract[0]
+                if (-not (Test-ManagedStartupTaskMarker $task) -or
+                        -not (Test-HighestLogonTaskDefinition $task $contract[1] `
+                            $contract[2] (Split-Path -Parent $contract[1]))) {
+                    throw ("Startup task '$($contract[0])' changed during setup: " +
+                        (Get-StartupTaskVerificationDetails $task $contract[1] `
+                            $contract[2] (Split-Path -Parent $contract[1])))
+                }
+            }
+            Write-SetupLog "Both elevated startup tasks remain verified." Green
+        }
+        else {
+            if ((Get-RootScheduledTask "RunVIIPER") -or
+                    (Get-RootScheduledTask "RunDS4Windows")) {
+                throw "A startup task remains while Run at Startup is disabled."
+            }
+        }
+    }
+    catch {
+        Enter-StartupTaskFallback "verifying scheduled tasks" $_.Exception.Message `
+            $viiperPath $ds4WindowsPath
+    }
+}
+
+function Suspend-StartupTasksForSetup([string]$viiperPath,
+        [string]$ds4WindowsPath) {
+    try {
+        Suspend-StartupTasksUntilInfrastructureReady $viiperPath $ds4WindowsPath
+        return $true
+    }
+    catch {
+        Enter-StartupTaskFallback "suspending startup across the required restart" `
+            $_.Exception.Message $viiperPath $ds4WindowsPath
+        return $false
+    }
+}
+
+function Start-Ds4WindowsAfterSetup([string]$viiperPath,
+        [string]$ds4WindowsPath) {
+    if ($script:RunAtStartupEnabled) {
+        try {
+            $task = Get-RootScheduledTask "RunDS4Windows"
+            if (-not (Test-ManagedStartupTaskMarker $task) -or
+                    -not (Test-HighestLogonTaskDefinition $task $ds4WindowsPath `
+                        "-m" (Split-Path -Parent $ds4WindowsPath))) {
+                throw "RunDS4Windows is not a verified managed startup task."
+            }
+            Start-ScheduledTask -TaskPath "\" -TaskName "RunDS4Windows" -ErrorAction Stop
+            return
+        }
+        catch {
+            Enter-StartupTaskFallback "starting DS4Windows" $_.Exception.Message `
+                $viiperPath $ds4WindowsPath
+        }
+    }
+    Start-Process -FilePath $ds4WindowsPath -ArgumentList "-m" `
+        -WorkingDirectory (Split-Path -Parent $ds4WindowsPath) `
+        -WindowStyle Hidden -ErrorAction Stop | Out-Null
+}
+
+function Start-ViiperAfterSetup([string]$viiperPath, [string]$ds4WindowsPath) {
+    if ($script:RunAtStartupEnabled -and -not $script:StartupTaskFallbackActive) {
+        if (Start-AndVerifyViiper "RunVIIPER" $viiperPath) { return $true }
+        Enter-StartupTaskFallback "starting VIIPER from its verified task" `
+            "The scheduled launch did not make VIIPER available." $viiperPath $ds4WindowsPath
+    }
+    return Start-AndVerifyViiperDirectly $viiperPath
 }
 
 function Test-SafePackageRelativePath([string]$relative) {
@@ -2935,22 +3185,7 @@ try {
     # Preserve the setting that launched the built-in installer. The standard
     # Burn installer retains its existing startup-enabled default because it
     # does not pass -SkipStartupTasks.
-    if ($script:RunAtStartupEnabled) {
-        [void](Register-ManagedStartupTaskPair $viiperPath `
-            $script:Ds4WindowsRestartPath)
-        Write-SetupLog (
-            "Registered and verified enabled elevated RunVIIPER and " +
-            "RunDS4Windows tasks for $script:TargetUserName before driver setup."
-        ) Green
-    }
-    else {
-        Remove-ManagedStartupTaskPair $viiperPath `
-            $script:Ds4WindowsRestartPath
-        Write-SetupLog (
-            "Run at Startup is disabled; no DS4Windows or VIIPER logon " +
-            "task was retained."
-        ) Green
-    }
+    Configure-StartupTasksForSetup $viiperPath $script:Ds4WindowsRestartPath
 
     Write-Step "Step 2 of 4 - Checking usbip-win2 0.9.7.7"
     $requiredUsbipVersion = $script:RequiredUsbipVersion
@@ -3149,8 +3384,11 @@ try {
     if ($script:UsbipReplacementPhaseOne) {
         [void](Stop-ViiperProcesses "pending usbip-win2 replacement reboot")
         if ($script:RunAtStartupEnabled) {
-            Suspend-StartupTasksUntilInfrastructureReady $viiperPath `
-                $script:Ds4WindowsRestartPath
+            [void](Suspend-StartupTasksForSetup $viiperPath `
+                $script:Ds4WindowsRestartPath)
+        }
+        elseif ($script:StartupTaskFallbackActive) {
+            Set-InfrastructureStartupFailClosed $viiperPath $script:Ds4WindowsRestartPath
         }
         $script:ExitCode = 3010
         Write-Host ""
@@ -3167,42 +3405,23 @@ try {
             throw "VIIPER registration could not proceed because a VIIPER process could not be closed automatically. Please close viiper.exe manually, then run Install / Repair again."
         }
 
-        if ($script:RunAtStartupEnabled) {
-            if (-not (Test-HighestLogonTask "RunVIIPER" $viiperPath `
-                        $script:ViiperServerArguments `
-                        (Split-Path -Parent $viiperPath)) -or
-                    -not (Test-HighestLogonTask "RunDS4Windows" `
-                        $script:Ds4WindowsRestartPath "-m" `
-                        (Split-Path -Parent $script:Ds4WindowsRestartPath))) {
-                throw "A verified startup task changed during setup."
-            }
-            Write-SetupLog "Both elevated startup tasks remain verified." Green
-        }
-        else {
-            $unexpectedTasks = @(
-                Get-RootScheduledTask "RunVIIPER"
-                Get-RootScheduledTask "RunDS4Windows"
-            ) | Where-Object { $null -ne $_ }
-            if ($unexpectedTasks.Count -gt 0) {
-                throw "A startup task was recreated while Run at Startup is disabled."
-            }
-            Write-SetupLog (
-                "Run at Startup remains disabled; one-time launch only."
-            ) Green
-        }
+        Confirm-StartupTasksForSetup $viiperPath $script:Ds4WindowsRestartPath
     }
     else {
         [void](Stop-ViiperProcesses "pending usbip-win2 reboot")
         if ($script:RunAtStartupEnabled) {
-            Suspend-StartupTasksUntilInfrastructureReady $viiperPath `
-                $script:Ds4WindowsRestartPath
-            Write-SetupLog (
-                "Both startup tasks are preserved but disabled across the " +
-                "reboot boundary. Repair will re-enable them only after " +
-                "usbip-win2 passes its runtime ABI check."
-            ) Yellow
+            if (Suspend-StartupTasksForSetup $viiperPath $script:Ds4WindowsRestartPath) {
+                Write-SetupLog (
+                    "Both startup tasks are preserved but disabled across the " +
+                    "reboot boundary. Repair will re-enable them only after " +
+                    "usbip-win2 passes its runtime ABI check."
+                ) Yellow
+            }
         }
         else {
+            if ($script:StartupTaskFallbackActive) {
+                Set-InfrastructureStartupFailClosed $viiperPath $script:Ds4WindowsRestartPath
+            }
             Write-SetupLog (
                 "Run at Startup remains disabled. Restart Windows, then " +
                 "launch DS4Windows manually to finish readiness checks."
@@ -3213,22 +3432,7 @@ try {
     Write-Step "Step 4 of 4 - Verifying runtime readiness"
     $viiperStarted = $false
     if ($script:UsbipRuntimeReady -and -not $script:RebootRecommended) {
-        $viiperStarted = if ($script:RunAtStartupEnabled) {
-            $startedFromTask = Start-AndVerifyViiper "RunVIIPER"
-            if (-not $startedFromTask) {
-                Write-SetupLog (
-                    "The verified startup task did not start VIIPER in this " +
-                    "session; retrying the same packaged executable directly."
-                ) Yellow
-                Start-AndVerifyViiperDirectly $viiperPath
-            }
-            else {
-                $true
-            }
-        }
-        else {
-            Start-AndVerifyViiperDirectly $viiperPath
-        }
+        $viiperStarted = Start-ViiperAfterSetup $viiperPath $script:Ds4WindowsRestartPath
     }
     if ($script:UsbipRuntimeReady -and -not $script:RebootRecommended -and
             $viiperStarted) {
@@ -3266,17 +3470,7 @@ try {
                 Stop-InstallerHostForStandardMigration
                 Remove-PortableDs4WindowsPackageForStandardMode
             }
-            if ($script:RunAtStartupEnabled) {
-                Start-ScheduledTask -TaskPath "\" `
-                    -TaskName "RunDS4Windows" -ErrorAction Stop
-            }
-            else {
-                Start-Process -FilePath $script:Ds4WindowsRestartPath `
-                    -ArgumentList "-m" `
-                    -WorkingDirectory (Split-Path -Parent `
-                        $script:Ds4WindowsRestartPath) `
-                    -WindowStyle Hidden -ErrorAction Stop | Out-Null
-            }
+            Start-Ds4WindowsAfterSetup $viiperPath $script:Ds4WindowsRestartPath
         }
     }
     else {
@@ -3307,7 +3501,7 @@ catch {
                 $_.Exception.Message
             ) Red
         }
-        if ($script:RunAtStartupEnabled -and $script:InstallDir -and
+        if ($script:InstallDir -and
                 $script:Ds4WindowsRestartPath) {
             $failureViiperPath = Join-Path $script:InstallDir "viiper.exe"
             Set-InfrastructureStartupFailClosed $failureViiperPath `

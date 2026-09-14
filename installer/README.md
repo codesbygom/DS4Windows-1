@@ -18,9 +18,9 @@ Installed startup tasks continue to target the verified installed broker.
 ```powershell
 .\installer\build-installer.ps1 `
   -PublishRoot .\bin\x64\Release\output `
-  -ProductVersion 5.0.6.0 `
-  -BundleVersion 5.0.6.0 `
-  -DisplayVersion VIIPERRC4.6 `
+  -ProductVersion 5.0.7.0 `
+  -BundleVersion 5.0.7.0 `
+  -DisplayVersion VIIPERRC4.6.1 `
   -SkipApplicationPublish
 ```
 
@@ -37,10 +37,14 @@ guesswork.
 
 Installer composition also runs a non-mutating startup-task simulation. It
 schema-parses the exact-SID XML in memory, mocks registration and verification,
-checks value escaping and the two-name root-task allowlist, preserves foreign
-same-name collisions across registration/removal/containment, verifies partial
-pair rollback, and proves that normal absence does not become a failed CIM
-query while genuine enumeration failures remain fatal.
+checks value escaping and the original two-name root-task allowlist, verifies
+durable backup before installer-authorized replacement of reserved names,
+and exercises partial-pair failure and Task Scheduler errors. These task-only
+errors now warn and use verified direct launch instead of canceling setup.
+Automatic logon startup may still need Repair. Runtime launch, uninstall and
+failure containment retain strict task-content checks; no arbitrary task is
+trusted just because its name matches. Backups are retained under the installer
+log directory's `task-backups` folder.
 
 Set `DS4W_SIGN_CERT_PATH` plus `DS4W_SIGN_CERT_PASSWORD`, or use
 `DS4W_SIGN_CERT_THUMBPRINT` for a protected certificate-store identity. Set

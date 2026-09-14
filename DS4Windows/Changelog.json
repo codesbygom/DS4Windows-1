@@ -1,9 +1,33 @@
 {
-  "latest_version": "5.0.6.0",
-  "latest_version_number_info": {"majorPart": 5, "minorPart": 0, "buildPart": 6},
-  "updated_at": "2026-09-14T14:32:00+0000",
+  "latest_version": "5.0.7.0",
+  "latest_version_number_info": {"majorPart": 5, "minorPart": 0, "buildPart": 7},
+  "updated_at": "2026-09-14T17:05:00+0000",
   "changelog": {
     "versions": [
+    {
+      "version_str": "5.0.7.0",
+      "version_number_info": {"majorPart": 5, "minorPart": 0, "buildPart": 7},
+      "base_header": "Release Candidate 4.6.1 Hotfix — Dial In Your Aim, Safer HidHide",
+      "release_date": "2026-09-14T17:05:00+0000",
+      "locales": [
+        {
+          "code": "en",
+          "header": "Release Candidate 4.6.1 Hotfix — Dial In Your Aim, Safer HidHide",
+          "log_text": [
+            "* **Startup-task recovery (#98/#103)** - retain RunVIIPER and RunDS4Windows, back up existing definitions before repair, and recover from registration or verification errors with a startup warning and verified direct launch instead of aborting setup",
+            "* **360-degree flick-stick calibration** - choose a test button in Axis Config beside either stick's Real World Calibration, save, and tap it in-game to check one full turn",
+            "* **Predictable calibration** - holds do not repeat, taps do not queue, and profile, mode, button or connection changes cancel unfinished turns; normal bindings are preserved when unassigned",
+            "* **Cleaner trigger settings** - remove the legacy effect, start and strength controls from Axis Config; use Trigger Lab while saved effects and native game feedback remain intact",
+            "* **HidHide crash safeguard** - reject Windows app-execution aliases during registration and check the Applications list before opening the configuration client",
+            "* **Targeted HidHide recovery** - with confirmation, back up and remove only identified unsafe aliases while preserving other application permissions and hidden-device rules",
+            "* **Complete matching packages** - DS4Windows 5.0.7.0 includes unchanged VIIPER 0.1.5-rc4.6 and Xbox output identity; DS4Updater 2.0.6 remains compatible"
+          ],
+          "editor": "hbashton",
+          "editors_note": ["Unsigned release candidate. The complete local x64 suite passed 5,991 tests with zero failures and 11 opt-in skips. Calibration UI layouts were checked in light and dark themes at normal and 150% scale. Calibration requires mouse look and depends on in-game sensitivity. The HidHide safeguard covers the confirmed app-alias crash, not unrelated client failures. No audio, haptics, adaptive-trigger transport or Nintendo rumble retuning."],
+          "updated_at": "2026-09-14T17:05:00+0000"
+        }
+      ]
+    },
     {
       "version_str": "5.0.6.0",
       "version_number_info": {"majorPart": 5, "minorPart": 0, "buildPart": 6},

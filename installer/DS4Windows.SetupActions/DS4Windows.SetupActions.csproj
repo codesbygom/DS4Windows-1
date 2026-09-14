@@ -15,5 +15,6 @@
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="System.Management" Version="8.0.0" />
+    <Compile Include="..\InstallerStartupTaskPolicy.cs" Link="InstallerStartupTaskPolicy.cs" />
   </ItemGroup>
 </Project>

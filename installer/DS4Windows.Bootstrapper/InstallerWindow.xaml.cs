@@ -105,12 +105,16 @@ namespace DS4Windows.Bootstrapper
             ProgressPercent.Text = percent + "%";
         }
 
-        internal void ShowComplete(LaunchAction action)
+        internal void ShowComplete(LaunchAction action, bool startupWarning = false)
         {
             HidePages();
             CompletePage.Visibility = Visibility.Visible;
             LaunchCheckBox.Visibility = Visibility.Visible;
             applying = false;
+            CompleteTitle.Text = "DS4Windows is ready";
+            CompleteDescription.Text = startupWarning
+                ? "Installation completed. Automatic startup could not be configured. You can launch DS4Windows now; run Repair to retry startup setup."
+                : "Installation and verification completed successfully.";
             if (action == LaunchAction.Uninstall)
             {
                 CompleteTitle.Text = "DS4Windows was removed";
@@ -119,11 +123,13 @@ namespace DS4Windows.Bootstrapper
             }
         }
 
-        internal void ShowRestart()
+        internal void ShowRestart(bool startupWarning = false)
         {
             HidePages();
             RestartPage.Visibility = Visibility.Visible;
             RestartDescription.Text = "Windows must restart before setup can safely continue. Setup will resume after you sign in.";
+            if (startupWarning)
+                RestartDescription.Text += " Automatic startup could not be configured. Run Repair after restarting to retry it.";
             RestartNowButton.IsEnabled = true;
             applying = false;
         }

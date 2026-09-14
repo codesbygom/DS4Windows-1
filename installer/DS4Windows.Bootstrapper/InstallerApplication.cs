@@ -242,40 +242,15 @@ namespace DS4Windows.Bootstrapper
 
         internal void LaunchDs4Windows()
         {
-            var task = new ProcessStartInfo(
-                Path.Combine(Environment.SystemDirectory, "schtasks.exe"),
-                "/Run /TN \"RunDS4Windows\"")
-            {
-                UseShellExecute = false,
-                CreateNoWindow = true,
-                WindowStyle = ProcessWindowStyle.Hidden,
-            };
-            try
-            {
-                using (var process = Process.Start(task))
-                {
-                    if (process != null && process.WaitForExit(10000) &&
-                        process.ExitCode == 0)
-                    {
-                        for (var attempt = 0; attempt < 20; attempt++)
-                        {
-                            using (var running = FirstDs4WindowsProcess())
-                            {
-                                if (running != null) return;
-                            }
-                            System.Threading.Thread.Sleep(100);
-                        }
-                    }
-                }
-            }
-            catch { }
-
-            // A standard user elevated the installer with alternate admin
-            // credentials, or task registration was deliberately deferred.
-            // The installed application must still launch successfully.
             var path = Path.Combine(
                 Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles),
                 "DS4Windows", "DS4Windows.exe");
+            // Setup can reclaim its reserved name, but an unsuccessful repair
+            // never authorizes launching an unverified task from that name.
+            if (TryRunInstalledDs4Task(path)) return;
+
+            // Alternate admin credentials or intentionally disabled startup
+            // must not prevent directly launching the installed application.
             if (File.Exists(path))
             {
                 try
@@ -291,15 +266,73 @@ namespace DS4Windows.Bootstrapper
             }
         }
 
-        private static Process FirstDs4WindowsProcess()
+        private bool TryRunInstalledDs4Task(string executable)
         {
-            var processes = Process.GetProcessesByName("DS4Windows");
-            if (processes.Length == 0) return null;
-            for (var index = 1; index < processes.Length; index++)
+            object service = null, folder = null, task = null, running = null;
+            try
             {
-                processes[index].Dispose();
+                string sid = engine.GetVariableString("TargetUserSid");
+                if (string.IsNullOrWhiteSpace(sid)) return false;
+                var type = Type.GetTypeFromProgID("Schedule.Service");
+                if (type == null) return false;
+                service = Activator.CreateInstance(type);
+                ((dynamic)service).Connect();
+                folder = ((dynamic)service).GetFolder(@"\");
+                task = ((dynamic)folder).GetTask("RunDS4Windows");
+                string xml = ((dynamic)task).Xml;
+                if (!Installation.InstallerStartupTaskPolicy.IsManaged(xml,
+                        executable, "-m", sid, requireEnabled: true)) return false;
+                if (!string.Equals(xml, (string)((dynamic)task).Xml, StringComparison.Ordinal))
+                    return false;
+                running = ((dynamic)task).Run(null);
+                // Scheduler acceptance is not process creation. A queued or
+                // failed task must still allow the direct-launch fallback.
+                return running != null && WaitForInstalledDs4Process(executable);
             }
-            return processes[0];
+            catch (COMException error) when (error.HResult == unchecked((int)0x80070002))
+            {
+                return false;
+            }
+            catch (Exception error)
+            {
+                engine.Log(LogLevel.Verbose, "Managed startup launch unavailable: " + error.Message);
+            }
+            finally
+            {
+                ReleaseTaskComObject(running);
+                ReleaseTaskComObject(task);
+                ReleaseTaskComObject(folder);
+                ReleaseTaskComObject(service);
+            }
+            return false;
+        }
+
+        private static bool WaitForInstalledDs4Process(string executable)
+        {
+            var elapsed = Stopwatch.StartNew();
+            do
+            {
+                foreach (var process in Process.GetProcessesByName("DS4Windows"))
+                {
+                    using (process)
+                    {
+                        try
+                        {
+                            if (!process.HasExited && string.Equals(
+                                    process.MainModule?.FileName, executable,
+                                    StringComparison.OrdinalIgnoreCase)) return true;
+                        }
+                        catch { /* Exit or inaccessible process is not proof. */ }
+                    }
+                }
+                Thread.Sleep(100);
+            } while (elapsed.ElapsedMilliseconds < 3000);
+            return false;
+        }
+
+        private static void ReleaseTaskComObject(object value)
+        {
+            if (value != null && Marshal.IsComObject(value)) Marshal.FinalReleaseComObject(value);
         }
 
         internal void OpenLog()
@@ -755,17 +788,44 @@ namespace DS4Windows.Bootstrapper
                 return;
             }
 
+            bool startupWarning = plannedAction != LaunchAction.Uninstall &&
+                HasCurrentStartupWarning();
+            if (startupWarning)
+                engine.Log(LogLevel.Standard,
+                    "Installation completed with a startup-task warning. Automatic logon startup may need Repair.");
             Ui(() =>
             {
                 if (restartRequired)
                 {
-                    window.ShowRestart();
+                    window.ShowRestart(startupWarning);
                 }
                 else
                 {
-                    window.ShowComplete(plannedAction);
+                    window.ShowComplete(plannedAction, startupWarning);
                 }
             });
+        }
+
+        private bool HasCurrentStartupWarning()
+        {
+            try
+            {
+                using (var machine = Microsoft.Win32.RegistryKey.OpenBaseKey(
+                           Microsoft.Win32.RegistryHive.LocalMachine,
+                           Microsoft.Win32.RegistryView.Registry64))
+                using (var key = machine.OpenSubKey(@"SOFTWARE\DS4Windows"))
+                {
+                    return Installation.InstallerStartupTaskPolicy.HasCurrentWarning(
+                        engine.GetVariableString("SetupCorrelationId"),
+                        key?.GetValue("StartupTaskWarningCorrelationId") as string,
+                        key?.GetValue("StartupTaskWarning") as string);
+                }
+            }
+            catch (Exception ex)
+            {
+                engine.Log(LogLevel.Verbose, "Could not read optional startup warning: " + ex.Message);
+                return false;
+            }
         }
 
         private void ShowFailure(int status, string message)

@@ -2,8 +2,9 @@
 
 The DS4Windows installer is treated as a transaction with one owner and one
 commit point. A package is not considered installed merely because its child
-process returned zero; the complete DS4Windows, VIIPER, USB-IP, task, ABI, and
-API contract must be verified first.
+process returned zero; the complete DS4Windows, VIIPER, USB-IP, ABI, and API
+contract must be verified first. Automatic logon startup is a separately
+reported convenience: task-only failures warn and allow verified direct launch.
 
 ## Transaction rules
 
@@ -41,6 +42,14 @@ API contract must be verified first.
 13. Program Files ACL normalization is a required safety gate for both the
     managed application and VIIPER backend; setup never registers an elevated
     task against a directory it could not protect.
+14. Setup reserves only the original root tasks `RunVIIPER` and
+    `RunDS4Windows`. Existing definitions are durably backed up before
+    installer-authorized replacement. Backup, registration, verification and
+    Scheduler access errors must not cancel installation; they record a
+    correlated warning and use the direct-launch path without silently
+    changing the user's startup preference. Runtime/uninstall continue to
+    require verified task contents. Driver and API failures are not swallowed
+    by this task-only recovery.
 
 The RC4.5 portable ZIP additionally has an explicit, separate
 [local broker startup contract](validation/2026-09-08-portable-broker-startup.md).
@@ -52,7 +61,7 @@ ZIP-based updater copies them there; they cannot change its broker ownership.
 
 ## Pinned runtime contract
 
-- VIIPER must match the SHA-256 of the bundled 0.1.3-rc4.5 executable.
+- VIIPER must match the SHA-256 of the bundled 0.1.5-rc4.6 executable.
 - `usbip.exe` must report version 0.9.7.7 and match the pinned executable
   SHA-256.
 - The active `usbip2_ude` and `usbip2_filter` driver files must match the two
@@ -61,7 +70,7 @@ ZIP-based updater copies them there; they cannot change its broker ownership.
   mismatch diagnostic.
 - The VIIPER API must answer its local readiness probe.
 - The machine readiness marker must be
-  `VIIPER-0.1.3-rc4.5+USBIP-0.9.7.7 / Ready` in the 64-bit registry view.
+  `VIIPER-0.1.5-rc4.6+USBIP-0.9.7.7 / Ready` in the 64-bit registry view.
 
 DS4Windows repeats these identity and ABI checks at startup. Missing or
 mismatched prerequisites open an offline repair prompt; suppressing a location

@@ -6,6 +6,9 @@ param(
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
+# Load only the Microsoft-generated enum types; no scheduled task is queried or
+# changed here. The fake Scheduler functions below shadow all mutation APIs.
+Import-Module ScheduledTasks -ErrorAction Stop
 
 $backendPath = (Resolve-Path -LiteralPath $BackendScript).Path
 $tokens = $null
@@ -67,8 +70,10 @@ foreach ($functionName in @(
         "Assert-ManagedStartupTaskName",
         "Get-RootScheduledTask",
         "Convert-AccountToSid",
+        "Test-TaskPrincipalEnumValue",
         "Test-HighestLogonTaskDefinition",
         "Test-HighestLogonTask",
+        "Get-StartupTaskVerificationDetails",
         "Test-ManagedStartupTaskMarker",
         "Test-KnownPackagedViiperExecutable",
         "Test-LegacyManagedStartupTask",
@@ -83,7 +88,16 @@ foreach ($functionName in @(
         "Register-ViiperRunTask",
         "Register-Ds4WindowsRunTask",
         "Register-ManagedStartupTaskPair",
-        "Set-InfrastructureStartupFailClosed")) {
+        "Suspend-StartupTasksUntilInfrastructureReady",
+        "Set-InfrastructureStartupFailClosed",
+        "Set-StartupTaskWarning",
+        "Enter-StartupTaskFallback",
+        "Configure-StartupTasksForSetup",
+        "Confirm-StartupTasksForSetup",
+        "Suspend-StartupTasksForSetup",
+        "Start-Ds4WindowsAfterSetup",
+        "Start-ViiperAfterSetup",
+        "Disable-ViiperStartup")) {
     Invoke-Expression (Get-BackendFunctionDefinition $functionName)
 }
 
@@ -200,6 +214,22 @@ $script:RegisterCalls = 0
 $script:RegisterNames = @()
 $script:RegisterForceNames = @()
 $script:RegisterFailureNames = @()
+$script:StartedNames = @()
+$script:DirectLaunches = @()
+$script:StartFailure = $false
+$script:DirectViiperSuccess = $true
+$script:TaskViiperStarts = 0
+$script:DirectViiperStarts = 0
+$script:WarningValues = @{}
+$script:RunAtStartupEnabled = $true
+$script:RequestedRunAtStartupEnabled = $true
+$script:StartupTaskFallbackActive = $false
+$script:StartupTaskWarning = ""
+$script:InfrastructureRegistryPath = "HKLM:\SOFTWARE\DS4Windows"
+$script:CorrelationId = "test-startup-correlation"
+$script:RegistrationMutation = $null
+$script:EnumerationMutation = $null
+$script:RegisterRaceName = ""
 $script:EnumerateCalls = 0
 $script:EnumerationFailure = $false
 $script:UnregisterCalls = 0
@@ -221,6 +251,20 @@ function Reset-FakeTaskState {
     $script:RegisterNames = @()
     $script:RegisterForceNames = @()
     $script:RegisterFailureNames = @()
+    $script:StartedNames = @()
+    $script:DirectLaunches = @()
+    $script:StartFailure = $false
+    $script:DirectViiperSuccess = $true
+    $script:TaskViiperStarts = 0
+    $script:DirectViiperStarts = 0
+    $script:WarningValues = @{}
+    $script:RunAtStartupEnabled = $true
+    $script:RequestedRunAtStartupEnabled = $true
+    $script:StartupTaskFallbackActive = $false
+    $script:StartupTaskWarning = ""
+    $script:RegistrationMutation = $null
+    $script:EnumerationMutation = $null
+    $script:RegisterRaceName = ""
     $script:EnumerateCalls = 0
     $script:EnumerationFailure = $false
     $script:UnregisterCalls = 0
@@ -269,6 +313,7 @@ function New-FakeScheduledTask([string]$taskPath, [string]$taskName,
                 CimClassName = "MSFT_TaskLogonTrigger"
             }
             UserId = $null
+            Enabled = $true
         })
         Principal = [pscustomobject]@{
             UserId = $principalUser
@@ -313,6 +358,10 @@ function Register-ScheduledTask {
     if ($script:RegisterFailureNames -contains $TaskName) {
         throw "simulated registration failure for $TaskName"
     }
+    if ($TaskName -eq $script:RegisterRaceName) {
+        $script:RegisterRaceName = ""
+        $script:FakeTasks += New-ForeignScheduledTask $TaskName
+    }
     $existing = @($script:FakeTasks | Where-Object {
         $_.TaskPath -eq $TaskPath -and $_.TaskName -eq $TaskName
     })
@@ -325,6 +374,7 @@ function Register-ScheduledTask {
         })
     }
     $task = New-FakeScheduledTask $TaskPath $TaskName $Xml
+    if ($script:RegistrationMutation) { & $script:RegistrationMutation $task }
     $script:FakeTasks = @($script:FakeTasks) + $task
     return $task
 }
@@ -333,6 +383,7 @@ function Get-ScheduledTask {
     [CmdletBinding()]
     param()
     $script:EnumerateCalls++
+    if ($script:EnumerationMutation) { & $script:EnumerationMutation $script:EnumerateCalls }
     if ($script:EnumerationFailure) {
         throw "simulated Task Scheduler enumeration failure"
     }
@@ -358,6 +409,49 @@ function Unregister-ScheduledTask {
 
 function Enable-ScheduledTask {
     throw "Registration must not separately enable an XML-enabled task."
+}
+
+function Set-ItemProperty {
+    [CmdletBinding()]
+    param([string]$LiteralPath, [string]$Name, [string]$Value, [string]$Type)
+    Assert-Equal $LiteralPath "HKLM:\SOFTWARE\DS4Windows" "Warning persistence escaped its key."
+    if ($Name -notin @("StartupTaskWarning", "StartupTaskWarningCorrelationId")) {
+        throw "Unexpected registry mutation: $Name"
+    }
+    $script:WarningValues[$Name] = $Value
+}
+
+function Remove-ItemProperty {
+    [CmdletBinding()]
+    param([string]$LiteralPath, [string]$Name)
+    Assert-Equal $Name "VIIPER" "Unexpected startup registry cleanup."
+}
+
+function Start-ScheduledTask {
+    [CmdletBinding()]
+    param([string]$TaskPath, [string]$TaskName)
+    $script:StartedNames += $TaskName
+    if ($script:StartFailure) { throw "simulated scheduled launch denied" }
+}
+
+function Start-Process {
+    [CmdletBinding()]
+    param([string]$FilePath, [string]$ArgumentList, [string]$WorkingDirectory, [string]$WindowStyle)
+    Assert-Equal $WindowStyle "Hidden" "Direct launch was not hidden."
+    $script:DirectLaunches += $FilePath
+}
+
+function Start-AndVerifyViiper {
+    param([string]$taskName, [string]$viiperPath)
+    Assert-Equal $taskName "RunVIIPER" "Task launch used a different name."
+    $script:TaskViiperStarts++
+    return $false
+}
+
+function Start-AndVerifyViiperDirectly {
+    param([string]$viiperPath)
+    $script:DirectViiperStarts++
+    return $script:DirectViiperSuccess
 }
 
 function New-ScheduledTaskPrincipal {
@@ -860,22 +954,26 @@ Assert-Equal $script:UnregisterCalls 0 `
 Assert-Equal $script:FakeTasks.Count 2 `
     "Pair removal did not preserve both tasks after collision."
 
-# Pair registration also preflights both names. A foreign RunDS4Windows task
-# therefore causes zero RunVIIPER registration or rollback mutations.
+# Setup explicitly reclaims only the two original reserved names. The complete
+# old definitions are backed up before either member of the pair is changed.
 Reset-FakeTaskState
-$script:FakeTasks = @(New-ForeignScheduledTask "RunDS4Windows")
-$pairRegistrationRejected = $false
-try { [void](Register-ManagedStartupTaskPair $viiperPath $ds4Path) }
-catch {
-    $pairRegistrationRejected = $_.Exception.Message -match "foreign root task"
+$script:FakeTasks = @((New-ForeignScheduledTask "RunVIIPER"), (New-ForeignScheduledTask "RunDS4Windows"))
+if (-not (Register-ManagedStartupTaskPair $viiperPath $ds4Path)) {
+    throw "The installer could not recover the two reserved task names."
 }
-if (-not $pairRegistrationRejected) {
-    throw "Foreign RunDS4Windows collision did not block pair registration."
+Assert-Equal $script:RegisterCalls 2 "Reserved-name recovery did not register exactly twice."
+Assert-Equal $script:RegisterForceNames.Count 2 "Existing definitions were not replaced in place."
+Assert-Equal $script:TaskBackups.Count 2 "Both old definitions were not backed up."
+Assert-Equal ($script:RegisterNames -join ',') "RunVIIPER,RunDS4Windows" "Setup changed task names."
+foreach ($name in @("RunVIIPER", "RunDS4Windows")) {
+    $backupIndex = [Array]::IndexOf([string[]]$script:TaskEvents, "backup:$name")
+    $firstRegistration = [Array]::IndexOf([string[]]$script:TaskEvents, "register:RunVIIPER")
+    if ($backupIndex -lt 0 -or $backupIndex -gt $firstRegistration) {
+        throw "The installer mutated tasks before backing up the complete pair."
+    }
 }
-Assert-Equal $script:RegisterCalls 0 `
-    "Pair registration mutated RunVIIPER before validating RunDS4Windows."
 Assert-Equal $script:UnregisterCalls 0 `
-    "Foreign pair collision triggered rollback deletion."
+    "Reserved-name recovery used delete/recreate instead of replacement."
 
 # A genuine second-task provider failure rolls back only RunVIIPER created by
 # this pair transaction; no unowned task is touched.
@@ -943,6 +1041,214 @@ Assert-Equal $script:DisableCalls 0 `
     "Enumeration failure triggered a disable mutation."
 Assert-Equal $script:UnregisterCalls 0 `
     "Enumeration failure triggered a removal mutation."
+
+# The real pre-install sequence must leave a readable foreign reserved task
+# for explicit backup/reclaim, rather than bypassing Configure as a failure.
+Reset-FakeTaskState
+$script:InstallDir = $workingDirectory
+$script:Ds4WindowsRestartPath = $ds4Path
+$script:TargetRunKeyPath = "HKCU:\Fixture\Run"
+$script:FakeTasks = @((New-ForeignScheduledTask "RunVIIPER"), (New-ForeignScheduledTask "RunDS4Windows"))
+Disable-ViiperStartup
+Assert-Equal $script:StartupTaskFallbackActive $false "Strict pre-cleanup prevented authorized setup recovery."
+Configure-StartupTasksForSetup $viiperPath $ds4Path
+Assert-Equal $script:StartupTaskFallbackActive $false "Reserved-name recovery unnecessarily entered direct mode."
+Assert-Equal $script:TaskBackups.Count 2 "Pre-cleanup lost a reserved task's original definition."
+
+# A failed archive never authorizes replacement. Setup remains usable in
+# direct mode and publishes a warning for this invocation only.
+Reset-FakeTaskState
+$originalViiper = New-ForeignScheduledTask "RunVIIPER"
+$script:FakeTasks = @($originalViiper)
+$script:BackupFailure = $true
+Configure-StartupTasksForSetup $viiperPath $ds4Path
+Assert-Equal $script:StartupTaskFallbackActive $true "Backup failure aborted instead of selecting direct mode."
+Assert-Equal $script:RegisterCalls 0 "Backup failure permitted a registration mutation."
+Assert-Equal $script:DisableCalls 0 "Backup failure disabled an unowned task."
+Assert-Equal (Get-RootScheduledTask "RunVIIPER") $originalViiper "Backup failure changed the original task."
+Assert-Equal $script:WarningValues.StartupTaskWarningCorrelationId $script:CorrelationId `
+    "Startup warning was not correlated to this setup invocation."
+if ([string]::IsNullOrWhiteSpace($script:WarningValues.StartupTaskWarning)) { throw "Startup warning was missing." }
+Confirm-StartupTasksForSetup $viiperPath $ds4Path
+Assert-Equal (Start-ViiperAfterSetup $viiperPath $ds4Path) $true "Direct VIIPER launch did not remain available."
+Start-Ds4WindowsAfterSetup $viiperPath $ds4Path
+Assert-Equal $script:TaskViiperStarts 0 "Direct mode attempted a VIIPER scheduled launch."
+Assert-Equal $script:StartedNames.Count 0 "Direct mode attempted a DS4 scheduled launch."
+Assert-Equal $script:DirectViiperStarts 1 "Direct mode did not launch VIIPER once."
+Assert-Equal $script:DirectLaunches.Count 1 "Direct mode did not launch DS4 once."
+
+# Burn Retry may retain the correlation ID. A successful retry clears BOTH
+# old warning values and restores this invocation's requested startup policy.
+$script:BackupFailure = $false
+Configure-StartupTasksForSetup $viiperPath $ds4Path
+Assert-Equal $script:StartupTaskFallbackActive $false "Successful retry remained in direct mode."
+Assert-Equal $script:RunAtStartupEnabled $true "Successful retry lost the requested startup preference."
+Assert-Equal $script:WarningValues.StartupTaskWarning "" "Successful retry retained stale warning text."
+Assert-Equal $script:WarningValues.StartupTaskWarningCorrelationId "" "Successful retry retained stale warning correlation."
+
+# Already exact tasks need no mutation or archive. An unavailable backup
+# destination must not disable otherwise healthy automatic startup.
+$script:BackupFailure = $true
+$registrationsBefore = $script:RegisterCalls
+Configure-StartupTasksForSetup $viiperPath $ds4Path
+Assert-Equal $script:StartupTaskFallbackActive $false "An exact task unnecessarily required a backup."
+Assert-Equal $script:RegisterCalls $registrationsBefore "An exact task was unnecessarily rewritten."
+
+# Changed marked definitions DO require backup before repair.
+Reset-FakeTaskState
+$markedTask = New-FakeScheduledTask "\" "RunVIIPER" `
+    ((New-HighestLogonTaskXml $viiperPath $script:ViiperServerArguments $workingDirectory).Replace('<Priority>1</Priority>', '<Priority>7</Priority>'))
+$script:FakeTasks = @($markedTask)
+Configure-StartupTasksForSetup $viiperPath $ds4Path
+Assert-Equal $script:TaskBackups.Count 1 "A changed marked task was replaced without a backup."
+Assert-Equal (Get-RootScheduledTask "RunVIIPER").Settings.Priority 1 "Marked task repair failed."
+
+Reset-FakeTaskState
+$markedTask = New-FakeScheduledTask "\" "RunVIIPER" `
+    ((New-HighestLogonTaskXml $viiperPath $script:ViiperServerArguments $workingDirectory).Replace('<Priority>1</Priority>', '<Priority>7</Priority>'))
+$script:FakeTasks = @($markedTask)
+$script:BackupFailure = $true
+Configure-StartupTasksForSetup $viiperPath $ds4Path
+Assert-Equal $script:RegisterCalls 0 "Failed marked-task backup permitted replacement."
+Assert-Equal $script:DisableCalls 0 "Failed marked-task backup indirectly disabled the original."
+Assert-Equal $markedTask.Settings.Enabled $true "Failed marked-task backup changed the original definition."
+
+# The definition can change after pair preflight but before registration.
+# The immediate pre-write reread must archive that updated definition too.
+Reset-FakeTaskState
+$script:FakeTasks = @((New-ForeignScheduledTask "RunVIIPER"), (New-ForeignScheduledTask "RunDS4Windows"))
+$script:EnumerationMutation = {
+    param($count)
+    if ($count -eq 4) { $script:FakeTasks[0].Description = "Changed immediately before overwrite" }
+}
+Configure-StartupTasksForSetup $viiperPath $ds4Path
+Assert-Equal $script:TaskBackups.Count 3 "A changed pre-write definition was not separately backed up."
+if (-not ($script:TaskBackups.Values -join ' ').Contains('Changed immediately before overwrite')) {
+    throw "The latest task definition was not archived."
+}
+
+# A racing creation first rejects create-only registration. The bounded retry
+# may replace it only after a fresh archive; no extra task name is invented.
+Reset-FakeTaskState
+$script:RegisterRaceName = "RunVIIPER"
+Configure-StartupTasksForSetup $viiperPath $ds4Path
+Assert-Equal $script:StartupTaskFallbackActive $false "A racing reserved task could not recover safely."
+Assert-Equal $script:RegisterCalls 3 "A racing task escaped bounded registration attempts."
+Assert-Equal $script:TaskBackups.Count 1 "A racing task was overwritten without backup."
+Assert-Equal ($script:RegisterForceNames -join ',') "RunVIIPER" "A racing task replacement targeted the wrong name."
+
+foreach ($failure in @("provider unavailable", "registration denied", "startup-disabled cleanup")) {
+    Reset-FakeTaskState
+    if ($failure -eq "provider unavailable") { $script:EnumerationFailure = $true }
+    if ($failure -eq "registration denied") { $script:RegisterFailureNames = @("RunDS4Windows") }
+    if ($failure -eq "startup-disabled cleanup") {
+        $script:RequestedRunAtStartupEnabled = $false
+        $script:FakeTasks = @(New-ForeignScheduledTask "RunVIIPER")
+    }
+    Configure-StartupTasksForSetup $viiperPath $ds4Path
+    Assert-Equal $script:StartupTaskFallbackActive $true "Task failure did not degrade to direct launch: $failure"
+    Assert-Equal $script:RunAtStartupEnabled $false "Task failure retained scheduled launch: $failure"
+    Confirm-StartupTasksForSetup $viiperPath $ds4Path
+    $script:DirectViiperSuccess = $false
+    Assert-Equal (Start-ViiperAfterSetup $viiperPath $ds4Path) $false `
+        "A failed direct runtime launch was incorrectly reported ready."
+}
+
+# Issue #98: verification remains strict, and reports which fields differ.
+# Native CIM integer values and Microsoft's generated adapter enums are the
+# same semantics. No truthy/coercible alternatives count as elevated interactive.
+Reset-FakeTaskState
+$runLevelType = 'Microsoft.PowerShell.Cmdletization.GeneratedTypes.ScheduledTask.RunLevelEnum' -as [type]
+$logonType = 'Microsoft.PowerShell.Cmdletization.GeneratedTypes.ScheduledTask.LogonTypeEnum' -as [type]
+if (-not $runLevelType -or -not $logonType) { throw "Microsoft Scheduler enum types were unavailable." }
+foreach ($representation in @(
+        @("Highest", "Interactive"),
+        @([int]1, [int]3),
+        @([byte]1, [long]3),
+        @([Enum]::ToObject($runLevelType, 1), [Enum]::ToObject($logonType, 3)))) {
+    $task = New-FakeScheduledTask "\" "RunVIIPER" `
+        (New-HighestLogonTaskXml $viiperPath $script:ViiperServerArguments $workingDirectory)
+    $task.Principal.RunLevel = $representation[0]
+    $task.Principal.LogonType = $representation[1]
+    Assert-Equal (Test-HighestLogonTaskDefinition $task $viiperPath `
+        $script:ViiperServerArguments $workingDirectory) $true "A documented Scheduler representation was rejected."
+}
+foreach ($kind in @("RunLevel", "LogonType")) {
+    $expected = if ($kind -eq "RunLevel") { 1 } else { 3 }
+    foreach ($invalid in @($null, $true, $false, [double]$expected, [decimal]$expected,
+            [string]$expected, "Unknown", 0, 6, [char]$expected, [DayOfWeek]$expected, @($expected))) {
+        Assert-Equal (Test-TaskPrincipalEnumValue $invalid $kind) $false `
+            "A non-contract Scheduler representation was accepted for $kind."
+    }
+}
+$disabledTriggerTask = New-FakeScheduledTask "\" "RunVIIPER" `
+    (New-HighestLogonTaskXml $viiperPath $script:ViiperServerArguments $workingDirectory)
+$disabledTriggerTask.Triggers[0].Enabled = $false
+Assert-Equal (Test-HighestLogonTaskDefinition $disabledTriggerTask $viiperPath `
+    $script:ViiperServerArguments $workingDirectory) $false "A disabled logon trigger was accepted as ready."
+Assert-Equal (Test-HighestLogonTaskDefinition $disabledTriggerTask $viiperPath `
+    $script:ViiperServerArguments $workingDirectory $false) $true "Disabled ownership/suspension validation changed."
+
+# Issue #98: verification remains strict, and reports which fields differ.
+# Do not log raw task arguments, which may contain credentials or other data.
+Reset-FakeTaskState
+$script:RegistrationMutation = { param($task) $task.Settings.Priority = 7 }
+Configure-StartupTasksForSetup $viiperPath $ds4Path
+Assert-Equal $script:StartupTaskFallbackActive $true "Invalid priority passed exact verification."
+$allLogs = $script:SetupLogs -join ' '
+foreach ($field in @('"priority":7', '"principalSid":', '"triggerType":', '"argumentsMatch":', '"workingDirectoryMatches":')) {
+    if (-not $allLogs.Contains($field)) { throw "Verification diagnostics lost field: $field" }
+}
+Reset-FakeTaskState
+Configure-StartupTasksForSetup $viiperPath $ds4Path
+$script:FakeTasks[0].Actions[0].Arguments = "private-token-should-not-be-logged"
+Confirm-StartupTasksForSetup $viiperPath $ds4Path
+Assert-Equal $script:StartupTaskFallbackActive $true "Changed task verification aborted instead of warning."
+if (($script:SetupLogs -join ' ').Contains('private-token-should-not-be-logged')) { throw "Task diagnostics leaked raw arguments." }
+
+# A task-only suspension failure must not clear the existing driver reboot
+# boundary or claim that startup suspension succeeded.
+Reset-FakeTaskState
+Configure-StartupTasksForSetup $viiperPath $ds4Path
+$script:FakeTasks = @($script:FakeTasks | Where-Object { $_.TaskName -ne "RunDS4Windows" })
+$script:UsbipRuntimeReady = $false
+$script:RebootRecommended = $true
+$script:ExitCode = 3010
+Assert-Equal (Suspend-StartupTasksForSetup $viiperPath $ds4Path) $false "A failed suspension claimed success."
+Assert-Equal $script:StartupTaskFallbackActive $true "Failed suspension did not record a warning."
+Assert-Equal $script:UsbipRuntimeReady $false "Task failure bypassed the driver readiness gate."
+Assert-Equal $script:RebootRecommended $true "Task failure cleared the driver reboot requirement."
+Assert-Equal $script:ExitCode 3010 "Task failure changed the pending-reboot result."
+
+Reset-FakeTaskState
+Configure-StartupTasksForSetup $viiperPath $ds4Path
+$script:StartFailure = $true
+Start-Ds4WindowsAfterSetup $viiperPath $ds4Path
+Assert-Equal $script:StartedNames.Count 1 "DS4 scheduled launch was not attempted once."
+Assert-Equal $script:DirectLaunches.Count 1 "DS4 task launch failure did not fall back directly."
+Assert-Equal $script:StartupTaskFallbackActive $true "DS4 task launch failure did not warn."
+
+# Original task names only; runtime/cleanup ownership remains strict. Check
+# top-level wiring without running the installer or touching live drivers.
+$backendText = $ast.Extent.Text
+if ($backendText.Contains('DS4Windows.RunVIIPER') -or $backendText.Contains('DS4Windows.RunDS4Windows')) {
+    throw "Setup introduced alternate task names."
+}
+$outerFailure = $backendText.Substring($backendText.LastIndexOf('catch {', $backendText.IndexOf('if ($script:UserCanceled)')))
+if (-not $outerFailure.Contains('if ($script:InstallDir -and')) {
+    throw "Real infrastructure failure lost task containment after startup fallback."
+}
+if ($outerFailure.Contains('if ($script:RunAtStartupEnabled -and $script:InstallDir')) {
+    throw "Startup fallback suppresses later infrastructure failure containment."
+}
+foreach ($required in @('Configure-StartupTasksForSetup $viiperPath',
+        'Confirm-StartupTasksForSetup $viiperPath',
+        'Start-ViiperAfterSetup $viiperPath',
+        'Start-Ds4WindowsAfterSetup $viiperPath',
+        'if ($script:UsbipRuntimeReady -and -not $script:RebootRecommended)',
+        'throw "VIIPER installed, but its local API did not start.')) {
+    if (-not $backendText.Contains($required)) { throw "Setup readiness wiring lost: $required" }
+}
 
 Write-Host (
     "Exact-SID startup-task XML, schema, ownership, collision, rollback, " +
