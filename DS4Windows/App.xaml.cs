@@ -168,6 +168,14 @@ namespace DS4WinWPF
             }
 
             if (DS4Windows.ViiperSetupManager.
+                TryRunSetupResume(e.Args, out int setupResumeExitCode))
+            {
+                runShutdown = false;
+                Current.Shutdown(setupResumeExitCode);
+                return;
+            }
+
+            if (DS4Windows.ViiperSetupManager.
                 TryRunElevatedInstallerHost(e.Args,
                     out int viiperInstallerExitCode))
             {

@@ -26,6 +26,7 @@
     <Compile Include="..\installer\DS4Windows.Bootstrapper\UninstallHelperPackagePlan.cs" Link="UninstallHelperPackagePlan.cs" />
     <Compile Include="..\installer\DS4Windows.SetupActions\SetupMutationOwnership.cs" Link="SetupMutationOwnership.cs" />
     <Compile Include="..\installer\InstallerStartupTaskPolicy.cs" Link="InstallerStartupTaskPolicy.cs" />
+    <Compile Include="..\installer\SetupResumeBundleSource.cs" Link="SetupResumeBundleSource.cs" />
     <Compile Include="..\utils\Switch2BluetoothAudioProbe\ProbeProtocol.cs" Link="ProbeProtocol.cs" />
     <Compile Include="..\utils\Switch2BluetoothLabClient\PlanFramer.cs" Link="PlanFramer.cs" />
     <Compile Include="..\utils\Switch2BluetoothLabClient\DualMonoPlanFactory.cs" Link="DualMonoPlanFactory.cs" />

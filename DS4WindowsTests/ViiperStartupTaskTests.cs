@@ -26,6 +26,53 @@ public class ViiperStartupTaskTests
         Assert.IsTrue(ViiperStartupTaskPolicy.IsValid(store.Task, Canonical, Sid));
     }
 
+    [DataTestMethod]
+    [DataRow(false, true, "", null, false)]
+    [DataRow(true, false, "RestartRequired", null, false)]
+    [DataRow(true, true, "RestartRequired", null, false)]
+    [DataRow(true, true, "", "inspection denied", false)]
+    [DataRow(true, true, "", null, true)]
+    public void ElevatedRegistrationRequiresCurrentIntentAndCompletedStartupSetup(
+        bool requested, bool actualEnabled, string deferredReason, string readError,
+        bool expectedWrite)
+    {
+        var store = new MemoryStore();
+        var state = new DS4WinWPF.StartupRegistrationState(false, actualEnabled,
+            requested, deferredReason, readError);
+
+        bool registered = ViiperStartupTaskPolicy.Register(Canonical, Sid,
+            Canonical, store, () => state.AllowsTaskRepair);
+
+        Assert.AreEqual(expectedWrite, registered);
+        Assert.AreEqual(expectedWrite ? 1 : 0, store.Writes);
+        Assert.AreEqual(0, store.Deletes);
+    }
+
+    [DataTestMethod]
+    [DataRow(false)]
+    [DataRow(true)]
+    public void PreferenceOrDeferralChangedDuringTaskInspectionPreventsRegistration(
+        bool deferred)
+    {
+        var state = new DS4WinWPF.StartupRegistrationState(false, true, true);
+        var original = ManagedTask() with { Priority = ProcessPriorityClass.BelowNormal };
+        var store = new MemoryStore
+        {
+            Task = original,
+            OnRead = () => state = deferred
+                ? state with { DeferredReason = "RestartRequired" }
+                : state with { Requested = false },
+        };
+
+        bool registered = ViiperStartupTaskPolicy.Register(Canonical, Sid,
+            Canonical, store, () => state.AllowsTaskRepair);
+
+        Assert.IsFalse(registered);
+        Assert.AreEqual(0, store.Writes);
+        Assert.AreEqual(0, store.Deletes);
+        Assert.AreSame(original, store.Task);
+    }
+
     [TestMethod]
     public void MarkedLowPriorityTaskIsUpdatedWithoutDeletingItsRecoveryState()
     {
@@ -279,7 +326,8 @@ public class ViiperStartupTaskTests
         internal int Writes;
         internal bool UpdatedExisting;
         internal bool RejectWrite;
-        public ViiperStartupTaskState Read() => Task;
+        internal Action OnRead;
+        public ViiperStartupTaskState Read() { OnRead?.Invoke(); return Task; }
         public void Delete() { Deletes++; Task = null; }
         public void Write(ViiperStartupTaskState state, bool updateExisting)
         {

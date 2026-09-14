@@ -44,6 +44,42 @@ public class RenamedExecutableSetupTests
             File.ReadAllLines(Path.Combine(staged, ".ds4windows-managed-files.txt")));
     }
 
+    [DataTestMethod]
+    [DataRow(false)]
+    [DataRow(true)]
+    public void UpdatedCustomOwnershipStagesOnlyExactHostWithoutRestoringLiveDefault(bool unrelatedCanonicalExists)
+    {
+        string host = Path.Combine(package, "My Controller.exe");
+        File.WriteAllText(host, "verified custom apphost");
+        string canonical = Path.Combine(package, "DS4Windows.exe");
+        if (unrelatedCanonicalExists) File.WriteAllText(canonical, "unowned canonical, never stage");
+        string manifest = Path.Combine(package, ".ds4windows-managed-files.txt");
+        string ownership = "My Controller.exe\nDS4Windows.runtimeconfig.json\nDS4Windows.deps.json\n";
+        File.WriteAllText(manifest, ownership);
+        string staged = ViiperSetupManager.StageInstallerPackageFiles(extras, setup, host);
+        Assert.AreEqual("verified custom apphost", File.ReadAllText(Path.Combine(staged, "DS4Windows.exe")));
+        Assert.IsFalse(File.Exists(Path.Combine(staged, "My Controller.exe")));
+        CollectionAssert.AreEqual(new[] { "DS4Windows.exe", "DS4Windows.runtimeconfig.json", "DS4Windows.deps.json" },
+            File.ReadAllLines(Path.Combine(staged, ".ds4windows-managed-files.txt")));
+        Assert.AreEqual(ownership, File.ReadAllText(manifest));
+        Assert.AreEqual("verified custom apphost", File.ReadAllText(host));
+        Assert.AreEqual(unrelatedCanonicalExists, File.Exists(canonical));
+        if (unrelatedCanonicalExists) Assert.AreEqual("unowned canonical, never stage", File.ReadAllText(canonical));
+    }
+
+    [TestMethod]
+    public void CustomOwnershipCannotAuthorizeAnUndeclaredHostOrExecutableSearch()
+    {
+        string host = Path.Combine(package, "My Controller.exe");
+        File.WriteAllText(host, "not manifest owned");
+        File.WriteAllText(Path.Combine(package, "Other.exe"), "unrelated apphost");
+        File.WriteAllText(Path.Combine(package, ".ds4windows-managed-files.txt"),
+            "Other.exe\nDS4Windows.runtimeconfig.json\nDS4Windows.deps.json\n");
+        Assert.ThrowsException<InvalidOperationException>(() =>
+            ViiperSetupManager.StageInstallerPackageFiles(extras, setup, host));
+        Assert.IsFalse(File.Exists(Path.Combine(setup, "package", "DS4Windows.exe")));
+    }
+
     [TestMethod]
     public void AliasCreationUsesNormalDotnetSidecarNames()
     {

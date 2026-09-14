@@ -270,7 +270,10 @@ def validate_setup_actions(setup_actions: str, setup_mutation_ownership: str) ->
         'ValidateManagedInstallRoot(installRoot)',
         'FileAttributes.ReparsePoint',
         'EnsureDirectoryPathHasNoReparsePoints(resumeRoot)',
-        'ProtectResumeDirectory(resumeRoot, targetUser.Sid)',
+        'StartupSetupRecovery.ProtectSnapshot(snapshotRoot, targetUser.Sid)',
+        'SetupResumeBundleSource.Resolve(bundleId)',
+        'StartupSetupRecovery.Register(new',
+        'FileMode.CreateNew',
         'HashesEqual(bundleSource, stagedBundle)',
         '=== DS4Windows setup invocation ',
         'IsRecognizedProductProcess(process, processName',
@@ -292,6 +295,29 @@ def validate_setup_actions(setup_actions: str, setup_mutation_ownership: str) ->
             raise SystemExit("Setup action safety contract missing: " + contract)
     if 'SetValue("DS4WindowsSetupResume"' in setup_actions:
         raise SystemExit("Setup must not create a custom HKLM RunOnce entry.")
+
+
+def validate_startup_recovery(recovery: str, bundle_source: str) -> None:
+    """Require the production resume boundary, in addition to behavior tests."""
+    for contract in (
+        '"--resume-startup-setup"', '"DS4Windows Setup Resume.lnk"',
+        'pending.TargetSid', 'pending.BootSessionId', 'previousAttempt',
+        'Guid.TryParseExact(pending.SnapshotId, "N"', 'ExpectedExecutable(pending)',
+        'RequirePlainPath(path)', 'ExecutableSha256', 'VerifyExecutable(',
+        '"SetupResumeAttempt"', 'IsOwnedShortcut(', 'SetAccessRuleProtection(true, false)',
+        'RequireProtectedSecurity(', 'security.DiscretionaryAcl == null',
+        'FileSystemRights.DeleteSubdirectoriesAndFiles',
+        'FileAttributes.ReparsePoint',
+    ):
+        if contract not in recovery:
+            raise SystemExit("Startup resume safety contract missing: " + contract)
+    for contract in (
+        'RegistryView.Registry64', 'registration.GetValue("BundleProviderKey")',
+        'registration.GetValue("BundleTag")', 'registration.GetValue("BundleUpgradeCode")',
+        'registration.GetValue("BundleCachePath")', 'StartupSetupRecovery.RequireProtectedPath(source, cacheRoot)',
+    ):
+        if contract not in bundle_source:
+            raise SystemExit("Startup resume source contract missing: " + contract)
 
 
 def main() -> int:
@@ -616,6 +642,10 @@ def main() -> int:
     setup_actions = (installer_root / "DS4Windows.SetupActions" / "Program.cs").read_text(encoding="utf-8")
     setup_mutation_ownership = (installer_root / "DS4Windows.SetupActions" / "SetupMutationOwnership.cs").read_text(encoding="utf-8")
     validate_setup_actions(setup_actions, setup_mutation_ownership)
+    validate_startup_recovery(
+        (installer_root / "StartupSetupState.cs").read_text(encoding="utf-8"),
+        (installer_root / "SetupResumeBundleSource.cs").read_text(encoding="utf-8"),
+    )
 
     backend_script = (
         args.bundle_source.parent.parent.parent

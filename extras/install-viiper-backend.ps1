@@ -47,6 +47,8 @@ $script:CorrelationId = if ([string]::IsNullOrWhiteSpace($CorrelationId) -or
 else { $CorrelationId.Trim().ToLowerInvariant() }
 $script:RunAtStartupEnabled = -not [bool]$SkipStartupTasks
 $script:RequestedRunAtStartupEnabled = $script:RunAtStartupEnabled
+$script:UserStartupRequested = $script:RunAtStartupEnabled
+$script:AlternateAdministrator = $false
 $script:StartupTaskFallbackActive = $false
 $script:StartupTaskWarning = ""
 if ($env:DS4W_SETUP_PORTABLE_INSTALLATION -eq '1') {
@@ -284,6 +286,51 @@ function Set-InfrastructureState([string]$state) {
     finally {
         $baseKey.Dispose()
     }
+}
+
+function Resolve-StartupSetupRequest($preference, [bool]$requested, [bool]$alternateAdministrator) {
+    if ($preference -is [int] -and ($preference -eq 0 -or $preference -eq 1)) {
+        $requested = $preference -eq 1
+    }
+    return [pscustomobject]@{ Requested = $requested; Enabled = $requested -and -not $alternateAdministrator }
+}
+
+function Update-StartupSetupRequest {
+    # The explicit preference belongs to the original interactive account,
+    # including when UAC uses different administrator credentials. Reread it
+    # immediately before registration so an opt-out during a reboot wins.
+    $users = [Microsoft.Win32.RegistryKey]::OpenBaseKey(
+        [Microsoft.Win32.RegistryHive]::Users, [Microsoft.Win32.RegistryView]::Registry64)
+    try {
+        $key = $users.OpenSubKey("$($script:TargetUserSid)\Software\DS4Windows")
+        try {
+            $preference = if ($key) { $key.GetValue("RunAtStartupRequested") } else { $null }
+            $resolved = Resolve-StartupSetupRequest $preference $script:UserStartupRequested $script:AlternateAdministrator
+            $script:UserStartupRequested = $resolved.Requested
+            $script:RequestedRunAtStartupEnabled = $resolved.Enabled
+        }
+        finally { if ($key) { $key.Dispose() } }
+    }
+    finally { $users.Dispose() }
+    $script:RunAtStartupEnabled = $script:RequestedRunAtStartupEnabled
+}
+
+function Save-StartupSetupIntent([string]$reason) {
+    $machine = [Microsoft.Win32.RegistryKey]::OpenBaseKey(
+        [Microsoft.Win32.RegistryHive]::LocalMachine, [Microsoft.Win32.RegistryView]::Registry64)
+    try {
+        $key = $machine.CreateSubKey("SOFTWARE\DS4Windows\StartupSetup\$($script:TargetUserSid)", $true)
+        try {
+            $key.SetValue("Requested", [int][bool]$script:UserStartupRequested,
+                [Microsoft.Win32.RegistryValueKind]::DWord)
+            $key.SetValue("DeferredReason", $reason, [Microsoft.Win32.RegistryValueKind]::String)
+            $boot = if ($reason -eq "RestartRequired") { Get-WindowsBootSessionId } else { "" }
+            $key.SetValue("BootSessionId", $boot, [Microsoft.Win32.RegistryValueKind]::String)
+            $key.Flush()
+        }
+        finally { $key.Dispose() }
+    }
+    finally { $machine.Dispose() }
 }
 
 function Get-CitrixUsbMonitorState {
@@ -2475,15 +2522,17 @@ function Suspend-StartupTasksUntilInfrastructureReady(
     # avoids a half-suspended pair if one task was replaced concurrently.
     foreach ($contract in $contracts) {
         $taskName = [string]$contract[0]
+        if (-not (Get-RootScheduledTask $taskName)) { continue }
         if (-not (Test-HighestLogonTask $taskName `
                 ([string]$contract[1]) ([string]$contract[2]) `
-                ([string]$contract[3]))) {
+                ([string]$contract[3]) $false)) {
             throw "Refusing to suspend an unverified startup task: $taskName"
         }
     }
 
     foreach ($contract in $contracts) {
         $taskName = [string]$contract[0]
+        if (-not (Get-RootScheduledTask $taskName)) { continue }
         Disable-ScheduledTask -TaskPath "\" -TaskName $taskName `
             -ErrorAction Stop | Out-Null
     }
@@ -2491,10 +2540,10 @@ function Suspend-StartupTasksUntilInfrastructureReady(
     foreach ($contract in $contracts) {
         $taskName = [string]$contract[0]
         $disabled = Get-RootScheduledTask $taskName
-        if (-not $disabled -or $disabled.Settings.Enabled -or
+        if ($disabled -and ($disabled.Settings.Enabled -or
                 -not (Test-HighestLogonTask $taskName `
                     ([string]$contract[1]) ([string]$contract[2]) `
-                    ([string]$contract[3]) $false)) {
+                    ([string]$contract[3]) $false))) {
             throw "Startup task '$taskName' did not enter the verified disabled state."
         }
     }
@@ -2598,6 +2647,7 @@ function Enter-StartupTaskFallback([string]$stage, [string]$failure,
 
 function Configure-StartupTasksForSetup([string]$viiperPath,
         [string]$ds4WindowsPath) {
+    Update-StartupSetupRequest
     Set-StartupTaskWarning ""
     $script:StartupTaskFallbackActive = $false
     $script:RunAtStartupEnabled = $script:RequestedRunAtStartupEnabled
@@ -2621,6 +2671,10 @@ function Confirm-StartupTasksForSetup([string]$viiperPath,
         [string]$ds4WindowsPath) {
     if ($script:StartupTaskFallbackActive) { return }
     try {
+        Update-StartupSetupRequest
+        if (-not $script:RunAtStartupEnabled) {
+            Remove-ManagedStartupTaskPair $viiperPath $ds4WindowsPath
+        }
         if ($script:RunAtStartupEnabled) {
             foreach ($contract in @(
                     @("RunVIIPER", $viiperPath, $script:ViiperServerArguments),
@@ -2686,6 +2740,7 @@ function Start-Ds4WindowsAfterSetup([string]$viiperPath,
 }
 
 function Start-ViiperAfterSetup([string]$viiperPath, [string]$ds4WindowsPath) {
+    Confirm-StartupTasksForSetup $viiperPath $ds4WindowsPath
     if ($script:RunAtStartupEnabled -and -not $script:StartupTaskFallbackActive) {
         if (Start-AndVerifyViiper "RunVIIPER" $viiperPath) { return $true }
         Enter-StartupTaskFallback "starting VIIPER from its verified task" `
@@ -2968,9 +3023,11 @@ try {
         throw "Administrator permission is required. Launch setup from DS4Windows so Windows can request it automatically."
     }
     $elevatedIdentity = [Security.Principal.WindowsIdentity]::GetCurrent()
+    Update-StartupSetupRequest
     if (-not [string]::Equals($elevatedIdentity.User.Value,
             $script:TargetUserSid,
             [StringComparison]::OrdinalIgnoreCase)) {
+        $script:AlternateAdministrator = $true
         $script:RunAtStartupEnabled = $false
         # Configure/Retry must preserve this invocation's alternate-account
         # deferral. The target user's saved startup preference is unchanged.
@@ -3185,10 +3242,11 @@ try {
             "DS4Windows"
     }
 
-    # Preserve the setting that launched the built-in installer. The standard
-    # Burn installer retains its existing startup-enabled default because it
-    # does not pass -SkipStartupTasks.
-    Configure-StartupTasksForSetup $viiperPath $script:Ds4WindowsRestartPath
+    # Record requested startup before suspending it. New tasks are registered
+    # only after the kernel-driver checks pass; repair must never expose an
+    # enabled task while those checks are still pending.
+    Save-StartupSetupIntent "RepairRequired"
+    Set-InfrastructureStartupFailClosed $viiperPath $script:Ds4WindowsRestartPath
 
     Write-Step "Step 2 of 4 - Checking usbip-win2 0.9.7.7"
     $requiredUsbipVersion = $script:RequiredUsbipVersion
@@ -3394,6 +3452,7 @@ try {
             Set-InfrastructureStartupFailClosed $viiperPath $script:Ds4WindowsRestartPath
         }
         $script:ExitCode = 3010
+        Save-StartupSetupIntent "RestartRequired"
         Write-Host ""
         Write-SetupLog (
             "VIIPER is installed and the old USBIP package removal was " +
@@ -3408,6 +3467,7 @@ try {
             throw "VIIPER registration could not proceed because a VIIPER process could not be closed automatically. Please close viiper.exe manually, then run Install / Repair again."
         }
 
+        Configure-StartupTasksForSetup $viiperPath $script:Ds4WindowsRestartPath
         Confirm-StartupTasksForSetup $viiperPath $script:Ds4WindowsRestartPath
     }
     else {
@@ -3464,7 +3524,14 @@ try {
         "Setup complete. VIIPER is ready for DS4Windows."
     }
     if ($script:UsbipRuntimeReady -and -not $script:RebootRecommended) {
+        # Startup can be canceled while the local API readiness probe is in
+        # progress. Reconcile again before publishing the completed state.
+        Confirm-StartupTasksForSetup $viiperPath $script:Ds4WindowsRestartPath
         Commit-InfrastructureReadiness
+        $startupReason = if ($script:AlternateAdministrator -and $script:UserStartupRequested) {
+            "AdministratorRequired"
+        } elseif ($script:StartupTaskFallbackActive) { "RepairRequired" } else { "" }
+        Save-StartupSetupIntent $startupReason
         Write-SetupLog $finish Green
         if ($script:Ds4WindowsRestartPath -and -not $script:InstallerMode) {
             Write-SetupLog "SUCCESSFUL: restarting DS4Windows in 2 seconds." Green
@@ -3479,6 +3546,7 @@ try {
     else {
         if ($script:SetupTransactionStarted) {
             Set-InfrastructureState "RebootPending"
+            Save-StartupSetupIntent "RestartRequired"
         }
         Write-SetupLog $finish Yellow
         if ($script:ExitCode -eq 0) {
@@ -3491,6 +3559,7 @@ catch {
     $setupFailure = $_
     Write-Host ""
     if ($script:SetupTransactionStarted) {
+        try { Save-StartupSetupIntent "RepairRequired" } catch { }
         # A failed transaction must never leave an auto-start path capable of
         # launching VIIPER against an unverified or half-replaced USB/IP ABI.
         # Only tasks whose complete action/principal contract still belongs
@@ -3523,6 +3592,7 @@ catch {
         $script:ExitCode = 3010
         if ($script:SetupTransactionStarted) {
             try { Set-InfrastructureState "RebootPending" } catch { }
+            try { Save-StartupSetupIntent "RestartRequired" } catch { }
         }
         Write-SetupLog $setupFailure.Exception.Message Yellow
         Write-SetupLog "Restart required; no install changes were made." Yellow

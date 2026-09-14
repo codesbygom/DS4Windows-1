@@ -69,6 +69,7 @@
 	</PropertyGroup>
 
 	<ItemGroup>
+		<Compile Include="..\installer\StartupSetupState.cs" Link="StartupSetupState.cs" />
 		<None Remove="libs\x64\**" Condition="'$(Platform)' != 'x64'" />
 		<None Remove="libs\x86\**" Condition="'$(Platform)' != 'x86'" />
 	</ItemGroup>

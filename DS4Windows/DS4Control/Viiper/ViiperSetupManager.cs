@@ -47,6 +47,7 @@ namespace DS4Windows
         public bool UsbipRebootOrRepairRequired { get; set; }
         public bool ViiperProcessConflict { get; set; }
         public bool ViiperStartupTaskReady { get; set; }
+        public string StartupPreferenceReadError { get; set; }
         public bool SetupScriptFound { get; set; }
         public string ViiperPath { get; set; }
         public string SetupScriptPath { get; set; }
@@ -73,6 +74,8 @@ namespace DS4Windows
             {
                 if (Ready)
                 {
+                    if (!string.IsNullOrEmpty(StartupPreferenceReadError))
+                        return "VIIPER is ready to use. Automatic startup could not be checked; restart DS4Windows to try again";
                     return ViiperStartupTaskReady
                         ? "VIIPER ready"
                         : "VIIPER ready; startup task needs repair";
@@ -247,11 +250,22 @@ namespace DS4Windows
             // takes precedence so runtime ownership agrees with its logon task.
             PortableLabContext lab = PortableLabContext.Current;
             PortableBrokerContext portable = PortableBrokerContext.Current;
-            bool startupEnabled = lab == null && portable == null &&
-                DS4WinWPF.StartupMethods.IsRunAtStartupEnabled();
+            bool startupRequested = false;
+            string startupPreferenceReadError = null;
+            if (lab == null && portable == null)
+            {
+                try { startupRequested = DS4WinWPF.StartupMethods.IsRunAtStartupRequested(); }
+                catch (Exception error)
+                {
+                    // Keep inspecting the installed task when intent is unknown;
+                    // an inspection failure is not an explicit startup opt-out.
+                    startupRequested = true;
+                    startupPreferenceReadError = error.ToString();
+                }
+            }
             string viiperPath = lab?.ViiperPath ?? portable?.ViiperPath ?? ResolveRuntimeViiperPath(
                 canonicalViiperPath, Global.PreferredViiperPath,
-                FindAlternativeViiperPath(canonicalViiperPath), startupEnabled);
+                FindAlternativeViiperPath(canonicalViiperPath), startupRequested);
             string bundledViiperPath = GetBundledViiperPath();
             string setupScriptPath = GetSetupScriptPath();
             string usbipPath = GetCanonicalUsbipPath();
@@ -296,7 +310,7 @@ namespace DS4Windows
                 ? lab.IsVerifiedBackend(viiperPath)
                 : portable != null ? portable.IsVerifiedBackend(viiperPath)
                 : IsBundledViiperAuthentic() && FilesHaveSameSha256(viiperPath, bundledViiperPath);
-            bool viiperStartupTaskReady = portable != null || !startupEnabled ||
+            bool viiperStartupTaskReady = portable != null || !startupRequested ||
                 IsViiperStartupTaskValid(canonicalViiperPath, out _);
             bool canonicalViiperRunning;
             string viiperProcessConflictMessage;
@@ -334,6 +348,7 @@ namespace DS4Windows
                 ViiperProcessConflict = !viiperProcessOwnershipReady,
                 ViiperProcessConflictMessage = viiperProcessConflictMessage,
                 ViiperStartupTaskReady = viiperStartupTaskReady,
+                StartupPreferenceReadError = startupPreferenceReadError,
                 SetupScriptFound = File.Exists(setupScriptPath),
                 UsbipInstalled = usbipInstalled,
                 UsbipExecutableSafe = usbipExecutableSafe,
@@ -515,7 +530,7 @@ namespace DS4Windows
                     Global.PreferredViiperPath,
                     FindAlternativeViiperPath(canonicalPath)),
                 IsSelectableViiperExecutable,
-                DS4WinWPF.StartupMethods.IsRunAtStartupEnabled,
+                CanRepairViiperStartupTask,
                 selectedPath => PersistPreferredViiperPath(selectedPath, canonicalPath),
                 startupPath => EnsureViiperStartupTask(startupPath,
                     requestElevation: true));
@@ -524,7 +539,7 @@ namespace DS4Windows
         public static void RefreshSelectedStartupTaskAfterRunAtStartupChange()
         {
             if (PortableLabContext.IsActive || PortableBrokerContext.IsActive) return;
-            if (!DS4WinWPF.StartupMethods.IsRunAtStartupEnabled())
+            if (!DS4WinWPF.StartupMethods.IsRunAtStartupRequested())
             {
                 if (!RemoveViiperStartupTask(requestElevation: true))
                     throw new IOException("DS4Windows startup is off, but Windows could not turn off VIIPER startup. Try again as administrator.");
@@ -579,7 +594,7 @@ namespace DS4Windows
                 string targetUserSid = identity.User?.Value ?? string.Empty;
                 string targetUserName = identity.Name ?? string.Empty;
                 bool runAtStartup = DS4WinWPF.StartupMethods.
-                    IsRunAtStartupEnabled();
+                    IsRunAtStartupRequested();
 
                 if (string.IsNullOrWhiteSpace(targetLocalAppData) ||
                     string.IsNullOrWhiteSpace(targetUserSid) ||
@@ -710,11 +725,18 @@ namespace DS4Windows
 
                 if (exitCode == 3010)
                 {
+                    bool scheduled = false;
+                    try
+                    {
+                        var pending = Installation.StartupSetupRecovery.Read(WindowsIdentity.GetCurrent().User?.Value);
+                        scheduled = pending != null && string.Equals(pending.BootSessionId,
+                            Installation.StartupSetupRecovery.BootSessionId(), StringComparison.Ordinal);
+                    }
+                    catch { }
                     ShowInstallerMessage(owner,
-                        "VIIPER setup reached a required kernel-driver " +
-                        "safety boundary. Restart Windows, then run Install " +
-                        "/ Repair again to finish setup. No replacement " +
-                        "driver was overlaid in the current Windows session.",
+                        scheduled
+                            ? "Save your work and restart Windows. Setup will continue when you sign in again; approve the Windows permission prompt if one appears."
+                            : "Save your work and restart Windows. Then open DS4Windows, go to Settings, and select Install / Repair VIIPER to finish setup.",
                         "VIIPER setup requires a restart",
                         MessageBoxImage.Warning);
                     return;
@@ -724,7 +746,7 @@ namespace DS4Windows
                 string message = exitCode == 0
                     ? "VIIPER was installed, but Windows is not reporting every component as ready yet. Restart Windows once, then click Refresh."
                     : exitCode == 1223
-                    ? "VIIPER setup was canceled. No USBIP driver or foreign executable was changed."
+                    ? "Setup was canceled. Select Install / Repair VIIPER in Settings when you're ready to try again."
                     : BuildInstallerFailureMessage(exitCode, logPath);
                 ShowInstallerMessage(owner, message, "VIIPER setup",
                     exitCode == 1223 ? MessageBoxImage.Information :
@@ -777,7 +799,13 @@ namespace DS4Windows
                         return true;
                     }
 
-                    RegisterViiperStartupTask(viiperPath);
+                    if (!RegisterViiperStartupTask(viiperPath))
+                    {
+                        // A canceled preference or pending setup is a clean
+                        // no-op, including when it changed during UAC.
+                        exitCode = 0;
+                        return true;
+                    }
                     exitCode = IsViiperStartupTaskValid(viiperPath, out _)
                         ? 0
                         : 1;
@@ -795,6 +823,47 @@ namespace DS4Windows
             return true;
         }
 
+        public static bool TryRunSetupResume(string[] args, out int exitCode)
+        {
+            exitCode = 0;
+            if (args == null || args.Length == 0 ||
+                !string.Equals(args[0], Installation.StartupSetupRecovery.ResumeArgument, StringComparison.Ordinal))
+                return false;
+            try
+            {
+                if (PortableLabContext.IsActive || args.Length != 2 ||
+                    !Installation.StartupSetupRecovery.TryClaim(args[1], Environment.ProcessPath, out var pending))
+                    return true;
+                if (pending.Kind != "embedded") throw new InvalidDataException("The setup resume kind changed.");
+                var info = new ProcessStartInfo(pending.Executable)
+                {
+                    UseShellExecute = true, Verb = "runas",
+                    WorkingDirectory = Path.GetDirectoryName(pending.Executable),
+                };
+                info.ArgumentList.Add(InstallerHostArgument);
+                info.ArgumentList.Add("--resume-id");
+                info.ArgumentList.Add(pending.Id);
+                info.ArgumentList.Add("--target-user-sid");
+                info.ArgumentList.Add(pending.TargetSid);
+                using var process = Process.Start(info);
+                if (process == null) throw new IOException("Windows did not start setup resume.");
+            }
+            catch (Win32Exception error) when (error.NativeErrorCode == 1223)
+            {
+                exitCode = 1223;
+                MessageBox.Show("Setup was canceled and is not finished yet. Open DS4Windows, go to Settings, and select Install / Repair VIIPER when you're ready.",
+                    "DS4Windows setup", MessageBoxButton.OK, MessageBoxImage.Information);
+            }
+            catch (Exception error)
+            {
+                exitCode = 1;
+                WriteInstallerHostLog("Automatic setup resume failed: " + error);
+                MessageBox.Show("Setup could not finish automatically. Open DS4Windows, go to Settings, and select Install / Repair VIIPER. Details have been saved in the setup log.",
+                    "DS4Windows setup", MessageBoxButton.OK, MessageBoxImage.Warning);
+            }
+            return true;
+        }
+
         public static bool TryRunElevatedInstallerHost(string[] args,
             out int exitCode)
         {
@@ -808,6 +877,8 @@ namespace DS4Windows
 
             try
             {
+                if (PortableLabContext.IsActive)
+                    throw new InvalidOperationException("Setup is unavailable in an isolated portable lab session.");
                 WindowsPrincipal principal = new WindowsPrincipal(
                     WindowsIdentity.GetCurrent());
                 if (!principal.IsInRole(WindowsBuiltInRole.Administrator))
@@ -816,28 +887,42 @@ namespace DS4Windows
                         "The embedded VIIPER installer host is not elevated.");
                 }
 
-                string targetLocalAppData = GetRequiredInstallerArgument(args,
+                Installation.StartupSetupResume resume = null;
+                if (args.Length == 5 && string.Equals(args[1], "--resume-id", StringComparison.Ordinal) &&
+                    string.Equals(args[3], "--target-user-sid", StringComparison.Ordinal))
+                {
+                    resume = Installation.StartupSetupRecovery.Read(args[4]);
+                    if (resume == null || resume.Kind != "embedded" ||
+                        !string.Equals(resume.Id, args[2], StringComparison.Ordinal) ||
+                        string.Equals(resume.BootSessionId, Installation.StartupSetupRecovery.BootSessionId(), StringComparison.Ordinal))
+                        throw new InvalidOperationException("The pending setup transaction is unavailable or still requires a restart.");
+                    Installation.StartupSetupRecovery.VerifyExecutable(resume, Environment.ProcessPath);
+                }
+                string targetLocalAppData = resume?.TargetLocalAppData ?? GetRequiredInstallerArgument(args,
                     "--target-local-appdata");
-                string targetUserSid = GetRequiredInstallerArgument(args,
+                string targetUserSid = resume?.TargetSid ?? GetRequiredInstallerArgument(args,
                     "--target-user-sid");
-                string targetUserName = GetRequiredInstallerArgument(args,
+                string targetUserName = resume?.TargetName ?? GetRequiredInstallerArgument(args,
                     "--target-user-name");
                 string targetDs4WindowsPath =
-                    GetRequiredInstallerArgument(args,
+                    resume?.TargetExecutable ?? GetRequiredInstallerArgument(args,
                         "--target-ds4windows-path");
-                string packageExtras = GetRequiredInstallerArgument(args,
+                string packageExtras = resume != null ? Path.Combine(Path.GetDirectoryName(resume.Executable), "extras") : GetRequiredInstallerArgument(args,
                     "--package-extras");
-                bool portableInstallation = Array.Exists(args, argument =>
+                bool portableInstallation = resume?.Portable ?? Array.Exists(args, argument =>
                     string.Equals(argument, "--portable-installation",
                         StringComparison.Ordinal));
-                bool skipStartupTasks = Array.Exists(args, argument =>
+                bool skipStartupTasks = resume != null
+                    ? !(Installation.StartupSetupStore.ReadUserPreference(targetUserSid) ??
+                        Installation.StartupSetupStore.Read(targetUserSid)?.Requested ?? false)
+                    : Array.Exists(args, argument =>
                     string.Equals(argument, "--skip-startup-tasks",
                         StringComparison.Ordinal));
 
                 string hostPath = Environment.ProcessPath;
-                if (string.IsNullOrWhiteSpace(hostPath) ||
+                if (string.IsNullOrWhiteSpace(hostPath) || (resume == null &&
                     !IsExactViiperExecutablePath(hostPath,
-                        targetDs4WindowsPath))
+                        targetDs4WindowsPath)))
                 {
                     throw new InvalidOperationException(
                         "The elevated installer host does not match the " +
@@ -854,20 +939,20 @@ namespace DS4Windows
                         "the running DS4Windows executable.");
                 }
 
-                string setupRoot = Path.Combine(
-                    GetNativeProgramFilesPath(),
-                    "DS4Windows.Setup");
+                string setupRoot = Installation.StartupSetupRecovery.EnsureProtectedStagingRoot(targetUserSid);
                 EnsurePathDoesNotTraverseReparsePoints(setupRoot,
                     requireExisting: false);
                 string setupDirectory = Path.Combine(setupRoot,
-                    Guid.NewGuid().ToString("N"));
+                    resume?.SnapshotId ?? Guid.NewGuid().ToString("N"));
                 Directory.CreateDirectory(setupDirectory);
                 EnsurePathDoesNotTraverseReparsePoints(setupDirectory,
                     requireExisting: true);
+                if (resume == null) Installation.StartupSetupRecovery.ProtectSnapshot(setupDirectory, targetUserSid);
                 string scriptPath = Path.Combine(setupDirectory,
                     InstallerScriptName);
                 DS4WinWPF.DS4Forms.ViiperSetupProgress progress = null;
                 bool progressFinished = false;
+                bool keepForResume = false;
 
                 void FinishProgress(bool success)
                 {
@@ -894,11 +979,16 @@ namespace DS4Windows
                         throw new InvalidOperationException(
                             "The embedded VIIPER installer resource is missing.");
                     }
-                    using (FileStream file = new FileStream(scriptPath,
-                               FileMode.CreateNew, FileAccess.Write,
-                               FileShare.None))
+                    if (resume == null)
                     {
+                        using FileStream file = new FileStream(scriptPath, FileMode.CreateNew, FileAccess.Write, FileShare.None);
                         resource.CopyTo(file);
+                    }
+                    else
+                    {
+                        using FileStream file = File.OpenRead(scriptPath);
+                        if (!CryptographicOperations.FixedTimeEquals(SHA256.HashData(resource), SHA256.HashData(file)))
+                            throw new IOException("The protected setup script no longer matches this application.");
                     }
 
                     // Snapshot the complete release package after elevation
@@ -908,8 +998,8 @@ namespace DS4Windows
                     // rewrite the package manifest across the UAC boundary.
                     progress.SetPhase(
                         "Verifying every packaged DS4Windows file...");
-                    string stagedPackageRoot = StageInstallerPackage(
-                        packageExtras, setupDirectory, hostPath);
+                    string stagedPackageRoot = resume != null ? Path.Combine(setupDirectory, "package") :
+                        StageInstallerPackage(packageExtras, setupDirectory, hostPath);
                     string stagedExtras = Path.Combine(stagedPackageRoot,
                         "extras");
                     progress.SetPhase(
@@ -978,13 +1068,39 @@ namespace DS4Windows
 
                     if (exitCode == 3010)
                     {
+                        // Keep the already verified, protected package across
+                        // reboot. The shortcut accepts only an opaque ID; all
+                        // original paths and account data stay in HKLM.
+                        var pending = new Installation.StartupSetupResume
+                        {
+                            Id = Guid.NewGuid().ToString("N"), SnapshotId = Path.GetFileName(setupDirectory),
+                            Kind = "embedded", TargetSid = targetUserSid, TargetName = targetUserName,
+                            TargetLocalAppData = targetLocalAppData,
+                            TargetRoamingAppData = resume?.TargetRoamingAppData ??
+                                GetTargetRoamingAppData(targetUserSid),
+                            TargetExecutable = portableInstallation ? targetDs4WindowsPath :
+                                Path.Combine(GetNativeProgramFilesPath(), "DS4Windows", "DS4Windows.exe"),
+                            Executable = Path.Combine(stagedPackageRoot, "DS4Windows.exe"),
+                            Portable = portableInstallation,
+                            StartupRequested = Installation.StartupSetupStore.ReadUserPreference(targetUserSid) ??
+                                Installation.StartupSetupStore.Read(targetUserSid)?.Requested ?? !skipStartupTasks,
+                            BootSessionId = Installation.StartupSetupRecovery.BootSessionId(),
+                        };
+                        Installation.StartupSetupRecovery.Register(pending);
+                        keepForResume = true;
                         MessageBox.Show(
-                            "VIIPER setup reached a required kernel-driver " +
-                            "safety boundary. Restart Windows, then run " +
-                            "Install / Repair again to finish setup. No " +
-                            "replacement driver was overlaid in this session.",
+                            "Restart Windows to finish VIIPER setup. Setup will resume at your next sign-in " +
+                            "and Windows may request administrator permission. Automatic startup remains paused until setup checks succeed.",
                             "Restart required", MessageBoxButton.OK,
                             MessageBoxImage.Warning);
+                    }
+                    else if (exitCode == 0)
+                    {
+                        try { Installation.StartupSetupRecovery.Clear(targetUserSid); }
+                        catch (Exception error) { WriteInstallerHostLog("Setup resume cleanup was deferred: " + error.Message); }
+                        if (resume != null)
+                            WriteInstallerHostLog("The active protected recovery snapshot is retained at " + setupDirectory +
+                                "; its startup continuation has completed.");
                     }
                     else if (exitCode != 0 && exitCode != 1223)
                     {
@@ -1009,7 +1125,8 @@ namespace DS4Windows
                 {
                     try
                     {
-                        Directory.Delete(setupDirectory, recursive: true);
+                        if (!keepForResume && resume == null)
+                            Directory.Delete(setupDirectory, recursive: true);
                     }
                     catch { }
                 }
@@ -1031,6 +1148,16 @@ namespace DS4Windows
                 catch { }
                 return true;
             }
+        }
+
+        private static string GetTargetRoamingAppData(string sid)
+        {
+            using var users = RegistryKey.OpenBaseKey(RegistryHive.Users, RegistryView.Registry64);
+            using var key = users.OpenSubKey(sid + @"\Software\Microsoft\Windows\CurrentVersion\Explorer\Shell Folders");
+            string path = key?.GetValue("AppData") as string;
+            if (string.IsNullOrWhiteSpace(path) || !Path.IsPathFullyQualified(path))
+                throw new IOException("Windows did not provide the original account's roaming profile path.");
+            return path;
         }
 
         internal static string StageInstallerPackageFiles(string packageExtras,
@@ -1099,6 +1226,15 @@ namespace DS4Windows
             HashSet<string> seen = new HashSet<string>(
                 StringComparer.OrdinalIgnoreCase);
             List<string> stagedRelativePaths = new List<string>();
+            bool hasCanonicalAppHost = relativePaths.Exists(path =>
+                string.Equals(path, "DS4Windows.exe", StringComparison.OrdinalIgnoreCase));
+            string hostFileName = Path.GetFileName(exactHostPath);
+            if (!hasCanonicalAppHost && !relativePaths.Exists(path =>
+                    string.Equals(path, hostFileName, StringComparison.OrdinalIgnoreCase)))
+            {
+                throw new InvalidOperationException(
+                    "The package manifest does not own its canonical or exact running apphost.");
+            }
 
             foreach (string relativePath in relativePaths)
             {
@@ -1112,8 +1248,17 @@ namespace DS4Windows
 
                 string sourcePath = Path.GetFullPath(Path.Combine(sourceRoot,
                     relativePath));
+                // Portable updates preserve a configured custom executable in
+                // the installed ownership manifest instead of recreating the
+                // default apphost. Canonicalize only that exact declared host
+                // inside this protected staging copy; the live package and
+                // its manifest remain unchanged. Never scan for another EXE.
+                string stagedRelativePath = !hasCanonicalAppHost &&
+                    string.Equals(relativePath, hostFileName,
+                        StringComparison.OrdinalIgnoreCase)
+                    ? "DS4Windows.exe" : relativePath;
                 string targetPath = Path.GetFullPath(Path.Combine(stagedRoot,
-                    relativePath));
+                    stagedRelativePath));
                 if (!sourcePath.StartsWith(sourcePrefix,
                         StringComparison.OrdinalIgnoreCase) ||
                     !targetPath.StartsWith(stagedPrefix,
@@ -1159,7 +1304,7 @@ namespace DS4Windows
                     FileMode.CreateNew, FileAccess.Write, FileShare.None);
                 source.CopyTo(target);
                 target.Flush(flushToDisk: true);
-                stagedRelativePaths.Add(relativePath.Replace(
+                stagedRelativePaths.Add(stagedRelativePath.Replace(
                     Path.DirectorySeparatorChar, '/'));
             }
 
@@ -1641,7 +1786,7 @@ namespace DS4Windows
         private static bool EnsureViiperStartupTask(string viiperPath,
             bool requestElevation)
         {
-            if (!IsSelectableViiperExecutable(viiperPath))
+            if (!CanRepairViiperStartupTask() || !IsSelectableViiperExecutable(viiperPath))
             {
                 return false;
             }
@@ -1655,7 +1800,7 @@ namespace DS4Windows
             {
                 if (Global.IsAdministrator())
                 {
-                    RegisterViiperStartupTask(viiperPath);
+                    if (!RegisterViiperStartupTask(viiperPath)) return false;
                     return IsViiperStartupTaskValid(viiperPath, out _);
                 }
 
@@ -1775,15 +1920,18 @@ namespace DS4Windows
                 new ViiperStartupTaskStore(service));
         }
 
-        private static void RegisterViiperStartupTask(string viiperPath)
+        private static bool CanRepairViiperStartupTask() =>
+            DS4WinWPF.StartupMethods.ReadRegistrationState().AllowsTaskRepair;
+
+        private static bool RegisterViiperStartupTask(string viiperPath)
         {
             string currentUserSid = WindowsIdentity.GetCurrent().User?.Value ??
                 throw new InvalidOperationException(
                     "Windows did not provide the current account SID.");
             using TaskService service = new TaskService();
-            ViiperStartupTaskPolicy.Register(viiperPath, currentUserSid,
+            return ViiperStartupTaskPolicy.Register(viiperPath, currentUserSid,
                 GetCanonicalViiperExePath(),
-                new ViiperStartupTaskStore(service));
+                new ViiperStartupTaskStore(service), CanRepairViiperStartupTask);
         }
 
         private sealed class ViiperStartupTaskStore : IViiperStartupTaskStore

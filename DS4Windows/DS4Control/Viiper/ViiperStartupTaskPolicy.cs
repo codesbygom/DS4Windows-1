@@ -73,9 +73,11 @@ internal static class ViiperStartupTaskPolicy
         (task.AllUsersLogon || string.Equals(task.LogonUserSid, currentSid,
             StringComparison.OrdinalIgnoreCase));
 
-    internal static void Register(string executablePath, string currentSid,
-        string canonicalPath, IViiperStartupTaskStore store)
+    internal static bool Register(string executablePath, string currentSid,
+        string canonicalPath, IViiperStartupTaskStore store,
+        Func<bool> startupAllowsRepair = null)
     {
+        if (startupAllowsRepair != null && !startupAllowsRepair()) return false;
         if (string.IsNullOrWhiteSpace(currentSid) ||
             !ViiperSetupManager.IsExactViiperExecutablePath(executablePath, canonicalPath))
             throw new InvalidOperationException(
@@ -83,10 +85,14 @@ internal static class ViiperStartupTaskPolicy
 
         ViiperStartupTaskState existing = store.Read();
         RequireOwnership(existing, currentSid);
+        // Recheck after elevation and ownership inspection: the user can turn
+        // startup off while a helper is waiting for approval or Scheduler I/O.
+        if (startupAllowsRepair != null && !startupAllowsRepair()) return false;
         // Updating in place lets a rejected Scheduler write leave the previous
         // registration intact. Create-only also preserves a foreign task that
         // appears after an initially empty read.
         store.Write(Create(executablePath, currentSid), updateExisting: existing != null);
+        return true;
     }
 
     internal static void Remove(string currentSid, IViiperStartupTaskStore store)

@@ -118,7 +118,8 @@ public class PortableBrokerIntegrationTests
             "lab?.ViiperPath ?? portable?.ViiperPath ?? ResolveRuntimeViiperPath(");
         StringAssert.Contains(status, "portable.IsVerifiedBackend(viiperPath)");
         StringAssert.Contains(status, "portable.InspectOwnedProcess(");
-        StringAssert.Contains(status, "portable != null || !startupEnabled ||");
+        StringAssert.Contains(status, "portable != null || !startupRequested ||");
+        StringAssert.Contains(status, "StartupMethods.IsRunAtStartupRequested()");
         StringAssert.Contains(status, "lab == null && portable == null && tryStartServer");
         StringAssert.Contains(status, "authenticated: lab != null || portable != null");
         Assert.IsFalse(status.Contains("PersistPreferredViiperPath(", StringComparison.Ordinal));

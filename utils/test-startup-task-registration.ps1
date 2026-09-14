@@ -68,6 +68,7 @@ if ($script:LegacyPortableViiperSha256 -ne
 
 foreach ($functionName in @(
         "Assert-ManagedStartupTaskName",
+        "Resolve-StartupSetupRequest",
         "Get-RootScheduledTask",
         "Convert-AccountToSid",
         "Test-TaskPrincipalEnumValue",
@@ -223,6 +224,8 @@ $script:DirectViiperStarts = 0
 $script:WarningValues = @{}
 $script:RunAtStartupEnabled = $true
 $script:RequestedRunAtStartupEnabled = $true
+$script:FakeUserPreference = $null
+$script:AlternateAdministrator = $false
 $script:StartupTaskFallbackActive = $false
 $script:StartupTaskWarning = ""
 $script:InfrastructureRegistryPath = "HKLM:\SOFTWARE\DS4Windows"
@@ -260,6 +263,8 @@ function Reset-FakeTaskState {
     $script:WarningValues = @{}
     $script:RunAtStartupEnabled = $true
     $script:RequestedRunAtStartupEnabled = $true
+    $script:FakeUserPreference = $null
+    $script:AlternateAdministrator = $false
     $script:StartupTaskFallbackActive = $false
     $script:StartupTaskWarning = ""
     $script:RegistrationMutation = $null
@@ -279,6 +284,17 @@ function Reset-FakeTaskState {
     $script:TaskBackups = @{}
     $script:BackupFailure = $false
     $script:TaskEvents = @()
+}
+
+# Registry is deliberately not opened by this harness. The actual pure
+# resolution used by the production registry adapter is exercised below.
+function Update-StartupSetupRequest {
+    if ($null -ne $script:FakeUserPreference) {
+        $resolved = Resolve-StartupSetupRequest $script:FakeUserPreference `
+            $script:RequestedRunAtStartupEnabled $script:AlternateAdministrator
+        $script:RequestedRunAtStartupEnabled = $resolved.Enabled
+        $script:RunAtStartupEnabled = $resolved.Enabled
+    }
 }
 
 function New-FakeScheduledTask([string]$taskPath, [string]$taskName,
@@ -1210,7 +1226,7 @@ if (($script:SetupLogs -join ' ').Contains('private-token-should-not-be-logged')
 # boundary or claim that startup suspension succeeded.
 Reset-FakeTaskState
 Configure-StartupTasksForSetup $viiperPath $ds4Path
-$script:FakeTasks = @($script:FakeTasks | Where-Object { $_.TaskName -ne "RunDS4Windows" })
+$script:FakeTasks[0].Actions[0].Arguments = "unexpected"
 $script:UsbipRuntimeReady = $false
 $script:RebootRecommended = $true
 $script:ExitCode = 3010
@@ -1255,6 +1271,44 @@ Configure-StartupTasksForSetup $viiperPath $ds4Path
 Assert-Equal $script:RegisterCalls 0 "Configure/Retry registered startup under alternate administrator credentials."
 Assert-Equal $script:RunAtStartupEnabled $false "Configure/Retry re-enabled deferred alternate-admin startup."
 Assert-Equal $script:StartupTaskFallbackActive $false "Intentional alternate-admin deferral was treated as a provider failure."
+
+# A restart does not turn an installer default into an opt-out. Explicit
+# choices made while setup was paused remain authoritative at confirmation.
+foreach ($case in @(
+        @($null, $true, $true, $true, $false),
+        @(0, $true, $false, $false, $false),
+        @(1, $false, $false, $true, $true),
+        @($null, $true, $false, $true, $true))) {
+    $resolved = Resolve-StartupSetupRequest $case[0] $case[1] $case[2]
+    Assert-Equal $resolved.Requested $case[3] "Requested startup intent changed."
+    Assert-Equal $resolved.Enabled $case[4] "Task authorization did not follow the account boundary."
+}
+Reset-FakeTaskState
+Configure-StartupTasksForSetup $viiperPath $ds4Path
+$script:FakeUserPreference = 0
+Confirm-StartupTasksForSetup $viiperPath $ds4Path
+Assert-Equal $script:FakeTasks.Count 0 "An opt-out during registration was lost."
+Assert-Equal $script:RunAtStartupEnabled $false "Canceled startup remained selected for automatic launch."
+
+# Execute the actual branch containing registration with fake Scheduler and
+# driver owners. Fresh setup must not expose an enabled task before the ABI
+# gate; absence of tasks is a valid suspended state on a fresh installation.
+$registrationGate = $ast.Find({
+    param($node)
+    $node -is [Management.Automation.Language.IfStatementAst] -and
+        $node.Clauses[0].Item1.Extent.Text -eq '$script:UsbipRuntimeReady -and -not $script:RebootRecommended' -and
+        $node.Extent.Text.Contains('Configure-StartupTasksForSetup $viiperPath')
+}, $true)
+if (-not $registrationGate) { throw "Task registration is not inside the runtime ABI gate." }
+function Stop-ViiperProcesses { return $true }
+foreach ($ready in @($false, $true)) {
+    Reset-FakeTaskState
+    $script:UsbipRuntimeReady = $ready
+    $script:RebootRecommended = -not $ready
+    $script:Ds4WindowsRestartPath = $ds4Path
+    Invoke-Expression $registrationGate.Extent.Text
+    Assert-Equal $script:RegisterCalls $(if ($ready) { 2 } else { 0 }) "ABI gate registered tasks at the wrong time."
+}
 
 if ($backendText.Contains('DS4Windows.RunVIIPER') -or $backendText.Contains('DS4Windows.RunDS4Windows')) {
     throw "Setup introduced alternate task names."

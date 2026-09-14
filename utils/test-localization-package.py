@@ -343,6 +343,42 @@ class SetupActionValidationTests(unittest.TestCase):
             VALIDATOR.validate_setup_actions(program + '\nSetValue("DS4WindowsSetupResume", "unsafe")', helper)
 
 
+class StartupResumeValidationTests(unittest.TestCase):
+    @staticmethod
+    def sources():
+        root = REPOSITORY / "installer"
+        return ((root / "StartupSetupState.cs").read_text(encoding="utf-8"),
+                (root / "SetupResumeBundleSource.cs").read_text(encoding="utf-8"))
+
+    def test_production_resume_sources_pass(self):
+        VALIDATOR.validate_startup_recovery(*self.sources())
+
+    def test_missing_identity_boot_snapshot_and_shortcut_guards_are_rejected(self):
+        recovery, source = self.sources()
+        for contract in ('pending.TargetSid', 'pending.BootSessionId',
+                         'previousAttempt', 'ExecutableSha256', 'IsOwnedShortcut(',
+                         'SetAccessRuleProtection(true, false)',
+                         'security.DiscretionaryAcl == null', 'FileAttributes.ReparsePoint'):
+            with self.subTest(contract=contract):
+                self.assertIn(contract, recovery)
+                with self.assertRaisesRegex(SystemExit, "Startup resume safety contract missing"):
+                    VALIDATOR.validate_startup_recovery(recovery.replace(contract, "removed"), source)
+
+    def test_untrusted_original_download_cannot_replace_registered_protected_cache(self):
+        recovery, source = self.sources()
+        for contract in ('registration.GetValue("BundleProviderKey")',
+                         'registration.GetValue("BundleCachePath")',
+                         'StartupSetupRecovery.RequireProtectedPath(source, cacheRoot)'):
+            with self.subTest(contract=contract):
+                self.assertIn(contract, source)
+                with self.assertRaisesRegex(SystemExit, "Startup resume source contract missing"):
+                    VALIDATOR.validate_startup_recovery(recovery, source.replace(contract, "removed"))
+
+    def test_installer_validates_the_resume_sources(self):
+        source = (REPOSITORY / "utils/validate-installer.py").read_text(encoding="utf-8")
+        self.assertIn("    validate_startup_recovery(", source[source.index("def main() -> int:"):])
+
+
 class ReleaseWorkflowValidationTests(unittest.TestCase):
     @staticmethod
     def workflow():

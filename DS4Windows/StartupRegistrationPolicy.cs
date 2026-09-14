@@ -8,8 +8,9 @@ internal static class StartupRegistrationPolicy
     internal const string ManagedTaskDescription = "DS4Windows managed startup task v1";
 
     internal static bool ShouldRepairTask(bool exists, bool enabled,
-        bool owned, bool matchesCurrentConfiguration) =>
-        exists && enabled && owned && !matchesCurrentConfiguration;
+        bool owned, bool matchesCurrentConfiguration, bool requested = true,
+        bool setupDeferred = false) =>
+        requested && !setupDeferred && exists && enabled && owned && !matchesCurrentConfiguration;
 
     internal static bool OwnsTask(string description, bool currentUser,
         bool expectedContract, bool recognizedLegacyExecutable) =>
@@ -20,6 +21,35 @@ internal static class StartupRegistrationPolicy
     internal static bool AuthorizesTaskHelper(bool elevated, string currentSid, string requestedSid) =>
         elevated && !string.IsNullOrWhiteSpace(currentSid) &&
         string.Equals(currentSid, requestedSid, StringComparison.OrdinalIgnoreCase);
+
+    internal static StartupRegistrationState ResolveState(bool program, bool task,
+        bool? userRequested, bool? setupRequested, string deferredReason) =>
+        new(program, task, userRequested ?? setupRequested, deferredReason);
+
+    internal static bool ResolveRequestedStartup(bool? recordedRequest,
+        Func<StartupRegistrationState> readState)
+    {
+        if (recordedRequest.HasValue) return recordedRequest.Value;
+        StartupRegistrationState state = readState();
+        if (state.ReadError != null)
+            throw new IOException(state.StatusText, new IOException(state.ReadError));
+        return state.RunAtStartupRequested;
+    }
+
+    internal static StartupRegistrationState RecoverLegacySetupDeferral(
+        StartupRegistrationState state, bool hasSetupRecord,
+        bool exactOwnedDisabledTask, string infrastructureState)
+    {
+        if (state.Requested.HasValue || state.Enabled || state.ReadError != null ||
+            hasSetupRecord || !exactOwnedDisabledTask ||
+            !string.Equals(infrastructureState, "RebootPending", StringComparison.Ordinal))
+            return state;
+
+        // Older setup disabled its verified task without recording a separate
+        // preference or scheduling a continuation. Preserve that intent, but
+        // require explicit repair because no trusted resume snapshot exists.
+        return state with { Requested = true, DeferredReason = "RepairRequired" };
+    }
 
     internal static void RemoveShortcut(string path, Func<string, bool> isOwned)
     {
@@ -51,16 +81,35 @@ internal static class StartupRegistrationPolicy
 
 internal enum StartupRegistrationMode { Disabled, Program, Task }
 
-internal readonly record struct StartupRegistrationState(bool Program, bool Task)
+internal readonly record struct StartupRegistrationState(bool Program, bool Task,
+    bool? Requested = null, string DeferredReason = null, string ReadError = null)
 {
     internal bool Enabled => Program || Task;
-    internal bool Matches(StartupRegistrationMode mode) => mode switch
+    internal bool RunAtStartupRequested => Requested ?? Enabled;
+    internal bool SetupDeferred => !string.IsNullOrWhiteSpace(DeferredReason);
+    internal bool Pending => RunAtStartupRequested && !Enabled && SetupDeferred;
+    internal bool AllowsTaskRepair => ReadError == null && RunAtStartupRequested && Enabled && !SetupDeferred;
+    internal bool Matches(StartupRegistrationMode mode) => ReadError == null && (mode switch
     {
-        StartupRegistrationMode.Disabled => !Enabled,
-        StartupRegistrationMode.Program => Program && !Task,
-        StartupRegistrationMode.Task => Task && !Program,
+        StartupRegistrationMode.Disabled => !Enabled && !RunAtStartupRequested,
+        StartupRegistrationMode.Program => RunAtStartupRequested &&
+            (Program && !Task || Pending),
+        StartupRegistrationMode.Task => RunAtStartupRequested &&
+            (Task && !Program || Pending),
         _ => false,
-    };
+    });
+
+    internal string StatusText => ReadError != null
+        ? "Automatic startup could not be checked. Restart DS4Windows to try again; details are in the Log tab. You can still open DS4Windows manually."
+        : !RunAtStartupRequested && Enabled
+        ? "Your choice to turn off automatic startup is saved, but Windows may still open DS4Windows when you sign in. Select Install / Repair VIIPER below to finish turning it off."
+        : !RunAtStartupRequested || Enabled ? string.Empty
+        : DeferredReason switch
+        {
+            "RestartRequired" => "Automatic startup is waiting for setup to finish. Save your work, restart Windows, and approve DS4Windows setup if prompted. You can still open DS4Windows manually.",
+            "AdministratorRequired" => "Automatic startup could not be enabled because setup used a different administrator account. Ask your administrator to review startup access for this Windows account, or open DS4Windows manually.",
+            _ => "Automatic startup is saved but not active yet. Select Install / Repair VIIPER below to finish setup. You can still open DS4Windows manually.",
+        };
 }
 
 internal readonly record struct StartupRegistrationChangeResult(
@@ -85,7 +134,11 @@ internal static class StartupRegistrationChange
             // Never show a failed write as a saved preference. If inspection
             // also fails, retain the last verified state rather than guess.
             StartupRegistrationState actual = previous;
-            try { actual = read(); } catch { }
+            try { actual = read(); }
+            catch (Exception inspectionError)
+            {
+                actual = previous with { ReadError = inspectionError.Message };
+            }
             return new(false, actual, error.Message);
         }
     }

@@ -71,12 +71,9 @@ class Transaction:
                 "clear-ready-marker",
                 "disable-owned-startup-tasks",
                 "persist-original-user",
-                "reboot",
-                "resume-next-boot",
-                "install-usbip-0.9.7.7",
-                "verify-hash-driver-abi-api",
-                "enable-owned-startup-tasks",
-                "commit-ready-marker",
+                "persist-requested-startup",
+                "stage-explicit-protected-resume",
+                "return-restart-required",
             ]
             self.result = 3010
         elif self.helper_result != 0:
@@ -97,6 +94,39 @@ class Transaction:
         return self
 
 
+@dataclass
+class ResumeTransaction:
+    """A later logon is a separate transaction, not implied by exit code 3010."""
+
+    boot_changed: bool = True
+    correct_user: bool = True
+    correct_transaction: bool = True
+    attempted: bool = False
+    snapshot_valid: bool = True
+    permission_granted: bool = True
+    infrastructure_ready: bool = True
+    startup_requested: bool = True
+    events: list[str] = field(default_factory=list)
+
+    def run(self) -> "ResumeTransaction":
+        if not (self.boot_changed and self.correct_user and self.correct_transaction) or self.attempted:
+            return self
+        self.events.append("verify-protected-snapshot")
+        if not self.snapshot_valid:
+            return self
+        self.events += ["record-one-attempt", "remove-owned-resume-shortcut"]
+        if not self.permission_granted:
+            self.events.append("show-repair-required")
+            return self
+        self.events += ["repair-pinned-infrastructure", "verify-hash-driver-abi-api"]
+        if not self.infrastructure_ready:
+            self.events.append("keep-startup-disabled")
+            return self
+        self.events.append("enable-original-startup-tasks" if self.startup_requested else "keep-startup-off")
+        self.events.append("commit-ready-marker")
+        return self
+
+
 def require(text: str, *contracts: str) -> None:
     missing = [contract for contract in contracts if contract not in text]
     if missing:
@@ -110,6 +140,7 @@ def main() -> None:
     backend = (ROOT / "extras/install-viiper-backend.ps1").read_text(encoding="utf-8")
     runtime = (ROOT / "DS4Windows/DS4Control/Viiper/ViiperSetupManager.cs").read_text(encoding="utf-8")
     startup_policy = (ROOT / "DS4Windows/DS4Control/Viiper/ViiperStartupTaskPolicy.cs").read_text(encoding="utf-8")
+    recovery = (ROOT / "installer/StartupSetupState.cs").read_text(encoding="utf-8")
 
     require(
         bootstrapper,
@@ -123,6 +154,8 @@ def main() -> None:
         "IsRelatedBundleNewer",
         "ShowFailure(1638",
         "command.Resume == ResumeType.Reboot",
+        "StartupSetupRecovery.TryClaim",
+        "requestedSetupResume ? LaunchAction.Repair",
         "Interlocked.CompareExchange(ref planStarted, 1, 0)",
         "Ignoring a duplicate installer plan request",
         'engine.SetVariableString("SetupCorrelationId"',
@@ -142,6 +175,8 @@ def main() -> None:
         'Id="ViiperUsbipUninstall"',
         'Name="DS4Windows.SetupActions.InfrastructureUninstall.exe"',
         'Permanent="yes"',
+        'Behavior="scheduleReboot"',
+        '--bundle-id',
     )
     require(
         backend,
@@ -154,6 +189,8 @@ def main() -> None:
         "Commit-InfrastructureReadiness",
         'Set-InfrastructureState "Failed"',
         'Protect-ElevatedTaskTargetDirectory $script:InstallDir "VIIPER"',
+        'Save-StartupSetupIntent "RestartRequired"',
+        'Update-StartupSetupRequest',
     )
     require(
         runtime,
@@ -168,7 +205,7 @@ def main() -> None:
         "FindAlternativeViiperPath(canonicalViiperPath)",
         "ViiperStartupTaskPolicy.RefreshOnLaunch(false, canonicalPath,",
         "ViiperStartupTaskPolicy.SelectRuntimePath(startupEnabled,",
-        "FindAlternativeViiperPath(canonicalViiperPath), startupEnabled)",
+        "FindAlternativeViiperPath(canonicalViiperPath), startupRequested)",
         "IsSelectableViiperExecutable,",
         "startupPath => EnsureViiperStartupTask(startupPath,",
         "FilesHaveSameSha256(normalized",
@@ -193,7 +230,12 @@ def main() -> None:
         "completed with exit code",
         "AppendLogWithRetry",
         'ReadArgument(args, "--correlation-id")',
+        'StartupSetupRecovery.Register',
+        'SetupResumeBundleSource.Resolve(bundleId)',
     )
+    require(recovery, "IsEligible(", "pending.TargetSid", "pending.BootSessionId",
+            "previousAttempt", "VerifyExecutable(", "ExecutableSha256",
+            '"SetupResumeAttempt"', "ExpectedExecutable(", "IsOwnedShortcut(")
 
     clean = Transaction("install").run()
     assert clean.events == [
@@ -232,8 +274,23 @@ def main() -> None:
         "stop-viiper", "disable-owned-startup-tasks", "record-failed-state",
     ]
     reboot = Transaction("install", helper_result=3010).run()
-    assert reboot.events.index("disable-owned-startup-tasks") < reboot.events.index("reboot")
-    assert reboot.events.index("verify-hash-driver-abi-api") < reboot.events.index("commit-ready-marker")
+    assert reboot.events.index("disable-owned-startup-tasks") < reboot.events.index("stage-explicit-protected-resume")
+    assert "commit-ready-marker" not in reboot.events
+    resumed = ResumeTransaction().run()
+    assert resumed.events.index("verify-hash-driver-abi-api") < resumed.events.index("enable-original-startup-tasks")
+    assert resumed.events[-1] == "commit-ready-marker"
+    for arguments in ({"boot_changed": False}, {"correct_user": False},
+                      {"correct_transaction": False}, {"attempted": True}):
+        assert not ResumeTransaction(**arguments).run().events
+    assert ResumeTransaction(snapshot_valid=False).run().events == ["verify-protected-snapshot"]
+    denied = ResumeTransaction(permission_granted=False).run()
+    assert denied.events[-1] == "show-repair-required"
+    assert "repair-pinned-infrastructure" not in denied.events
+    blocked = ResumeTransaction(infrastructure_ready=False).run()
+    assert blocked.events[-1] == "keep-startup-disabled" and "commit-ready-marker" not in blocked.events
+    opted_out = ResumeTransaction(startup_requested=False).run()
+    assert "enable-original-startup-tasks" not in opted_out.events
+    assert "keep-startup-off" in opted_out.events
     optional_failed = Transaction("install", optional_result=1).run()
     assert optional_failed.result == 0
     assert optional_failed.events[-1] == "report-optional-package-failure"

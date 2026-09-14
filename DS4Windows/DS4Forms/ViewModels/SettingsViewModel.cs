@@ -77,12 +77,13 @@ namespace DS4WinWPF.DS4Forms.ViewModels
         private readonly Action<StartupRegistrationMode> changeStartupRegistration;
         private readonly Action refreshViiperStartup;
         private readonly Action<string> reportStartupError;
+        private readonly Action<string> logStartupDiagnostic;
         public bool RunAtStartup
         {
             get => runAtStartup;
             set
             {
-                if (!SystemIntegrationEnabled || changingStartupRegistration || runAtStartup == value) return;
+                if (!CanChangeStartupPreference || changingStartupRegistration || runAtStartup == value) return;
                 ApplyStartupRegistration(value ? StartupRegistrationMode.Program : StartupRegistrationMode.Disabled);
             }
         }
@@ -94,7 +95,7 @@ namespace DS4WinWPF.DS4Forms.ViewModels
             get => runStartProg;
             set
             {
-                if (!SystemIntegrationEnabled || changingStartupRegistration || !runAtStartup || !value || runStartProg) return;
+                if (!CanChangeStartupMode || changingStartupRegistration || !runAtStartup || !value || runStartProg) return;
                 ApplyStartupRegistration(StartupRegistrationMode.Program);
             }
         }
@@ -106,7 +107,7 @@ namespace DS4WinWPF.DS4Forms.ViewModels
             get => runStartTask;
             set
             {
-                if (!SystemIntegrationEnabled || changingStartupRegistration || !runAtStartup || !value || runStartTask) return;
+                if (!CanChangeStartupMode || changingStartupRegistration || !runAtStartup || !value || runStartTask) return;
                 ApplyStartupRegistration(StartupRegistrationMode.Task);
             }
         }
@@ -115,6 +116,15 @@ namespace DS4WinWPF.DS4Forms.ViewModels
         private bool canWriteTask;
         public bool CanWriteTask { get => canWriteTask && SystemIntegrationEnabled; }
         public bool SystemIntegrationEnabled => !PortableLabContext.IsActive;
+        public bool CanChangeStartupPreference => SystemIntegrationEnabled && startupRegistration.ReadError == null;
+        public event EventHandler CanChangeStartupPreferenceChanged;
+        public bool CanChangeStartupMode => CanChangeStartupPreference && !startupRegistration.SetupDeferred;
+        public event EventHandler CanChangeStartupModeChanged;
+        public string StartupStatusText => startupRegistration.StatusText;
+        public event EventHandler StartupStatusTextChanged;
+        public Visibility StartupStatusVisibility => string.IsNullOrEmpty(StartupStatusText)
+            ? Visibility.Collapsed : Visibility.Visible;
+        public event EventHandler StartupStatusVisibilityChanged;
 
         public ImageSource uacSource;
         public ImageSource UACSource { get => uacSource; }
@@ -510,6 +520,8 @@ namespace DS4WinWPF.DS4Forms.ViewModels
             changeStartupRegistration = StartupMethods.SetRegistrationMode;
             refreshViiperStartup = ViiperSetupManager.RefreshSelectedStartupTaskAfterRunAtStartupChange;
             reportStartupError = ReportStartupChangeFailure;
+            logStartupDiagnostic = error => DS4Windows.AppLogger.LogToGui(
+                "Could not read Windows startup settings: " + error, true);
             checkEveryUnitIdx = 1;
             IsProfileChangedCheckVisible = Global.Notifications == 2 ? Visibility.Visible : Visibility.Collapsed;
 
@@ -543,8 +555,7 @@ namespace DS4WinWPF.DS4Forms.ViewModels
             }
             catch (Exception ex)
             {
-                SetStartupDisplay(default);
-                DS4Windows.AppLogger.LogToGui("Could not read Windows startup settings: " + ex.Message, true);
+                SetStartupDisplay(new(false, false, ReadError: ex.Message));
             }
 
             RefreshMonitorChoices();
@@ -575,12 +586,13 @@ namespace DS4WinWPF.DS4Forms.ViewModels
         // discovery, monitor enumeration, icons, or real startup registrations.
         internal SettingsViewModel(Func<StartupRegistrationState> read,
             Action<StartupRegistrationMode> change, Action refresh,
-            Action<string> reportError)
+            Action<string> reportError, Action<string> logDiagnostic = null)
         {
             readStartupRegistration = read ?? throw new ArgumentNullException(nameof(read));
             changeStartupRegistration = change ?? throw new ArgumentNullException(nameof(change));
             refreshViiperStartup = refresh ?? throw new ArgumentNullException(nameof(refresh));
             reportStartupError = reportError ?? throw new ArgumentNullException(nameof(reportError));
+            logStartupDiagnostic = logDiagnostic;
             canWriteTask = true;
             SetStartupDisplay(readStartupRegistration());
         }
@@ -606,20 +618,26 @@ namespace DS4WinWPF.DS4Forms.ViewModels
 
         private void SetStartupDisplay(StartupRegistrationState state)
         {
+            if (state.ReadError != null && state.ReadError != startupRegistration.ReadError)
+                logStartupDiagnostic?.Invoke(state.ReadError);
             startupRegistration = state;
-            runAtStartup = state.Enabled;
-            runStartTask = state.Task;
-            runStartProg = !state.Task;
-            ShowRunStartPanel = state.Enabled ? Visibility.Visible : Visibility.Collapsed;
+            runAtStartup = state.RunAtStartupRequested;
+            runStartTask = state.Task || state.Pending;
+            runStartProg = !runStartTask;
+            ShowRunStartPanel = runAtStartup ? Visibility.Visible : Visibility.Collapsed;
             RunAtStartupChanged?.Invoke(this, EventArgs.Empty);
             RunStartProgChanged?.Invoke(this, EventArgs.Empty);
             RunStartTaskChanged?.Invoke(this, EventArgs.Empty);
+            CanChangeStartupPreferenceChanged?.Invoke(this, EventArgs.Empty);
+            CanChangeStartupModeChanged?.Invoke(this, EventArgs.Empty);
+            StartupStatusTextChanged?.Invoke(this, EventArgs.Empty);
+            StartupStatusVisibilityChanged?.Invoke(this, EventArgs.Empty);
         }
 
         private static void ReportStartupChangeFailure(string error)
         {
-            string message = "The startup change could not be completed. " + error;
-            DS4Windows.AppLogger.LogToGui(message, true);
+            DS4Windows.AppLogger.LogToGui("The startup change could not be completed. " + error, true);
+            const string message = "The startup change could not be completed. Check the status under Run at Startup in Settings, and see the Log tab for details. You can still open DS4Windows manually.";
             MessageBox.Show(message, "Run at startup", MessageBoxButton.OK, MessageBoxImage.Warning);
         }
 

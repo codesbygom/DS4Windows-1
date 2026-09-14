@@ -29,6 +29,25 @@ public class StartupRegistrationTests
     }
 
     [TestMethod]
+    public void PassiveRepairCannotOverrideAnExplicitDisableAfterFailedRemoval()
+    {
+        Assert.IsFalse(StartupRegistrationPolicy.ShouldRepairTask(
+            exists: true, enabled: true, owned: true,
+            matchesCurrentConfiguration: false, requested: false));
+    }
+
+    [DataTestMethod]
+    [DataRow(false)]
+    [DataRow(true)]
+    public void PassiveRepairCannotBypassDeferredSetupEvenWhenStartupIsRequested(
+        bool actualEnabled)
+    {
+        Assert.IsFalse(StartupRegistrationPolicy.ShouldRepairTask(
+            exists: true, enabled: actualEnabled, owned: true,
+            matchesCurrentConfiguration: false, requested: true, setupDeferred: true));
+    }
+
+    [TestMethod]
     public void ExplicitDisableRemovesAnOwnedReadOnlyShortcut()
     {
         WithShortcut(path =>
@@ -91,6 +110,250 @@ public class StartupRegistrationTests
         Assert.IsTrue(view.RunStartTask);
         Assert.AreEqual(0, access.Changes);
         Assert.AreEqual(0, access.Refreshes);
+    }
+
+    [DataTestMethod]
+    [DataRow(true, null, null, "", true, false)]
+    [DataRow(false, null, null, "", false, false)]
+    [DataRow(false, null, true, "RestartRequired", true, true)]
+    [DataRow(false, false, true, "RestartRequired", false, false)]
+    [DataRow(false, true, false, "AdministratorRequired", true, true)]
+    [DataRow(true, false, true, "", false, false)]
+    public void RequestedStartupUsesExplicitChoiceThenSetupThenObservedState(
+        bool actualEnabled, bool? userRequested, bool? setupRequested,
+        string deferredReason, bool expectedRequested, bool expectedPending)
+    {
+        StartupRegistrationState state = StartupRegistrationPolicy.ResolveState(
+            false, actualEnabled, userRequested, setupRequested, deferredReason);
+
+        Assert.AreEqual(actualEnabled, state.Enabled);
+        Assert.AreEqual(expectedRequested, state.RunAtStartupRequested);
+        Assert.AreEqual(expectedPending, state.Pending);
+    }
+
+    [TestMethod]
+    public void DeferredStartupStaysCheckedAndExplainsRestartWithoutChangingTasks()
+    {
+        var access = new FakeStartupAccess
+        {
+            State = new(false, false, true, "RestartRequired"),
+        };
+        SettingsViewModel view = access.CreateView();
+
+        Assert.IsTrue(view.RunAtStartup);
+        Assert.IsTrue(view.RunStartTask);
+        Assert.IsFalse(view.CanChangeStartupMode);
+        StringAssert.Contains(view.StartupStatusText, "restart Windows");
+        StringAssert.Contains(view.StartupStatusText, "approve DS4Windows setup if prompted");
+        StringAssert.Contains(view.StartupStatusText, "open DS4Windows manually");
+        Assert.AreEqual(System.Windows.Visibility.Visible, view.StartupStatusVisibility);
+        view.RunStartProg = true;
+        Assert.AreEqual(0, access.Changes,
+            "A startup shortcut must not bypass setup's pending dependency gate.");
+        Assert.AreEqual(0, access.Refreshes);
+    }
+
+    [TestMethod]
+    public void ExplicitDisableCancelsPendingStartupEvenWhenRemovalFails()
+    {
+        var access = new FakeStartupAccess
+        {
+            State = new(false, false, true, "RestartRequired"),
+            SavePreferenceBeforeWrite = true,
+            WriteFailure = new UnauthorizedAccessException("denied"),
+        };
+        SettingsViewModel view = access.CreateView();
+
+        view.RunAtStartup = false;
+
+        Assert.IsFalse(view.RunAtStartup);
+        Assert.IsFalse(access.CreateView().RunAtStartup);
+        Assert.IsFalse(access.State.RunAtStartupRequested);
+        Assert.AreEqual(1, access.Errors.Count);
+    }
+
+    [TestMethod]
+    public void FailedRemovalDistinguishesSavedDisableFromStillActiveRegistration()
+    {
+        var access = new FakeStartupAccess
+        {
+            State = new(false, true, true),
+            SavePreferenceBeforeWrite = true,
+            WriteFailure = new UnauthorizedAccessException("denied"),
+        };
+        SettingsViewModel view = access.CreateView();
+
+        view.RunAtStartup = false;
+
+        Assert.IsFalse(view.RunAtStartup);
+        Assert.IsTrue(access.State.Enabled);
+        StringAssert.Contains(view.StartupStatusText, "choice to turn off automatic startup is saved");
+        StringAssert.Contains(view.StartupStatusText, "Windows may still open DS4Windows");
+        StringAssert.Contains(view.StartupStatusText, "Install / Repair VIIPER");
+        Assert.AreEqual(1, access.Errors.Count);
+    }
+
+    [TestMethod]
+    public void EnablingDeferredStartupSavesIntentWithoutRegisteringAnActiveTask()
+    {
+        var access = new FakeStartupAccess
+        {
+            State = new(false, false, false, "RestartRequired"),
+            SavePreferenceBeforeWrite = true,
+            DeferEnable = true,
+        };
+        SettingsViewModel view = access.CreateView();
+
+        view.RunAtStartup = true;
+
+        Assert.IsTrue(view.RunAtStartup);
+        Assert.IsTrue(access.CreateView().RunAtStartup);
+        Assert.IsFalse(access.State.Enabled);
+        Assert.IsTrue(access.State.Pending);
+        Assert.AreEqual(0, access.Errors.Count);
+    }
+
+    [TestMethod]
+    public void UnreadableStartupMetadataIsVisibleAndCannotBeSavedAsAnOptOut()
+    {
+        var access = new FakeStartupAccess
+        {
+            State = new(false, false, true, ReadError: "inspection denied"),
+        };
+        SettingsViewModel view = access.CreateView();
+
+        Assert.IsTrue(view.RunAtStartup);
+        Assert.IsFalse(view.CanChangeStartupPreference);
+        Assert.IsFalse(view.CanChangeStartupMode);
+        StringAssert.Contains(view.StartupStatusText, "could not be checked");
+        StringAssert.Contains(view.StartupStatusText, "Restart DS4Windows");
+        StringAssert.Contains(view.StartupStatusText, "Log tab");
+        StringAssert.Contains(view.StartupStatusText, "open DS4Windows manually");
+        Assert.IsFalse(view.StartupStatusText.Contains("inspection denied", StringComparison.Ordinal));
+        CollectionAssert.AreEqual(new[] { "inspection denied" }, access.Diagnostics);
+        view.RunAtStartup = false;
+        Assert.AreEqual(0, access.Changes);
+        Assert.IsTrue(access.State.RunAtStartupRequested);
+    }
+
+    [TestMethod]
+    public void LegacySchedulerReadFailureCannotBecomeAnInstallerOptOut()
+    {
+        IOException error = Assert.ThrowsException<IOException>(() =>
+            StartupRegistrationPolicy.ResolveRequestedStartup(null,
+                () => new(false, false, ReadError: "Scheduler unavailable")));
+        StringAssert.Contains(error.InnerException.Message, "Scheduler unavailable");
+        Assert.IsFalse(error.Message.Contains("Scheduler unavailable", StringComparison.Ordinal));
+    }
+
+    [DataTestMethod]
+    [DataRow(false)]
+    [DataRow(true)]
+    public void RecordedPreferenceDoesNotDependOnTaskSchedulerAvailability(bool requested)
+    {
+        Assert.AreEqual(requested, StartupRegistrationPolicy.ResolveRequestedStartup(
+            requested, () => throw new AssertFailedException(
+                "Known startup intent must not be replaced by a Scheduler read.")));
+    }
+
+    [TestMethod]
+    public void LegacyRebootDeferralKeepsStartupRequestedAndDirectsUserToRepair()
+    {
+        StartupRegistrationState state = StartupRegistrationPolicy.RecoverLegacySetupDeferral(
+            new(false, false), hasSetupRecord: false, exactOwnedDisabledTask: true,
+            infrastructureState: "RebootPending");
+        var access = new FakeStartupAccess { State = state };
+        SettingsViewModel view = access.CreateView();
+
+        Assert.IsTrue(view.RunAtStartup);
+        Assert.IsFalse(state.Enabled);
+        Assert.IsFalse(state.AllowsTaskRepair);
+        StringAssert.Contains(view.StartupStatusText, "Install / Repair VIIPER");
+        Assert.IsFalse(view.StartupStatusText.Contains("restart Windows", StringComparison.OrdinalIgnoreCase));
+        Assert.IsTrue(StartupRegistrationPolicy.ResolveRequestedStartup(null, () => state),
+            "Built-in repair must not pass SkipStartupTasks for the old setup deferral.");
+        Assert.AreEqual(0, access.Changes);
+    }
+
+    [DataTestMethod]
+    [DataRow("RepairRequired")]
+    [DataRow("UnrecognizedSetupState")]
+    [DataRow("")]
+    public void PendingStartupNamesTheRepairButtonAndManualFallback(string reason)
+    {
+        var access = new FakeStartupAccess { State = new(false, false, true, reason) };
+        SettingsViewModel view = access.CreateView();
+
+        Assert.IsTrue(view.RunAtStartup, "The checkbox must keep the saved choice.");
+        StringAssert.Contains(view.StartupStatusText, "saved but not active yet");
+        StringAssert.Contains(view.StartupStatusText, "Install / Repair VIIPER");
+        StringAssert.Contains(view.StartupStatusText, "open DS4Windows manually");
+        Assert.IsFalse(view.StartupStatusText.Contains("requested", StringComparison.OrdinalIgnoreCase));
+        Assert.AreEqual(0, access.Changes);
+    }
+
+    [TestMethod]
+    public void DifferentAdministratorAccountDoesNotSuggestAnElevationRetryLoop()
+    {
+        var access = new FakeStartupAccess
+        {
+            State = new(false, false, true, "AdministratorRequired"),
+        };
+        SettingsViewModel view = access.CreateView();
+
+        Assert.IsTrue(view.RunAtStartup);
+        StringAssert.Contains(view.StartupStatusText, "different administrator account");
+        StringAssert.Contains(view.StartupStatusText, "Ask your administrator");
+        StringAssert.Contains(view.StartupStatusText, "this Windows account");
+        StringAssert.Contains(view.StartupStatusText, "open DS4Windows manually");
+        Assert.IsFalse(view.StartupStatusText.Contains("repair", StringComparison.OrdinalIgnoreCase));
+        Assert.IsFalse(view.StartupStatusText.Contains("as administrator", StringComparison.OrdinalIgnoreCase));
+        Assert.AreEqual(0, access.Changes);
+    }
+
+    [DataTestMethod]
+    [DataRow(false, false, true, "RebootPending")]
+    [DataRow(true, false, true, "RebootPending")]
+    [DataRow(null, true, true, "RebootPending")]
+    [DataRow(null, false, false, "RebootPending")]
+    [DataRow(null, false, true, "Ready")]
+    [DataRow(null, false, true, "Failed")]
+    [DataRow(null, false, true, "rebootpending")]
+    [DataRow(null, false, true, null)]
+    public void LegacyMigrationCannotOverridePreferencesOrInferFromUnverifiedState(
+        bool? requested, bool hasSetupRecord, bool exactOwnedDisabledTask, string infrastructureState)
+    {
+        var original = new StartupRegistrationState(false, false, requested);
+
+        StartupRegistrationState actual = StartupRegistrationPolicy.RecoverLegacySetupDeferral(
+            original, hasSetupRecord, exactOwnedDisabledTask, infrastructureState);
+
+        Assert.AreEqual(original, actual);
+    }
+
+    [TestMethod]
+    public void BackendReadFailureRemainsVisibleWithoutBreakingHealthyControllerOutput()
+    {
+        var status = new DS4Windows.ViiperPrerequisiteStatus
+        {
+            ViiperInstalled = true,
+            ViiperPackageCurrent = true,
+            ServerRunning = true,
+            UsbipInstalled = true,
+            UsbipExecutableSafe = true,
+            UsbipDriverFilesSafe = true,
+            UsbipRuntimeReady = true,
+            ViiperStartupTaskReady = true,
+            StartupPreferenceReadError = "inspection denied",
+        };
+
+        Assert.IsTrue(status.Ready);
+        StringAssert.Contains(status.DisplayText, "VIIPER is ready to use");
+        StringAssert.Contains(status.DisplayText, "Automatic startup could not be checked");
+        StringAssert.Contains(status.DisplayText, "restart DS4Windows");
+        Assert.IsFalse(status.DisplayText.Contains("inspection denied", StringComparison.Ordinal));
+        Assert.AreEqual("inspection denied", status.StartupPreferenceReadError,
+            "Technical details remain available separately from the main status text.");
     }
 
     [TestMethod]
@@ -235,6 +498,7 @@ public class StartupRegistrationTests
         Assert.IsFalse(body.Contains("RemoveViiperStartupTask", StringComparison.Ordinal));
         Assert.IsFalse(body.Contains("DeleteViiperStartupTask", StringComparison.Ordinal));
         StringAssert.Contains(body, "ViiperStartupTaskPolicy.RefreshOnLaunch(");
+        StringAssert.Contains(body, "CanRepairViiperStartupTask,");
         DS4Windows.ViiperStartupTaskPolicy.RefreshOnLaunch(false,
             @"C:\Program Files\DS4Windows\VIIPER\viiper.exe",
             () => @"C:\Program Files\DS4Windows\VIIPER\viiper.exe",
@@ -250,7 +514,7 @@ public class StartupRegistrationTests
             "public static void RefreshSelectedStartupTaskAfterRunAtStartupChange()",
             "public static bool LaunchInstaller(");
         StringAssert.Matches(body, new Regex(
-            @"if\s*\(!DS4WinWPF\.StartupMethods\.IsRunAtStartupEnabled\(\)\)\s*\{\s*" +
+            @"if\s*\(!DS4WinWPF\.StartupMethods\.IsRunAtStartupRequested\(\)\)\s*\{\s*" +
             @"if\s*\(!RemoveViiperStartupTask\(requestElevation:\s*true\)\)\s*" +
             @"throw new IOException\("));
         StringAssert.Contains(body, "RefreshSelectedStartupTaskOnLaunch();");
@@ -281,12 +545,15 @@ public class StartupRegistrationTests
         internal bool IgnoreWrites;
         internal bool FailReadAfterWrite;
         internal bool FailRefresh;
+        internal bool SavePreferenceBeforeWrite;
+        internal bool DeferEnable;
         internal Exception WriteFailure;
         internal int Changes;
         internal int Refreshes;
         internal List<string> Errors = new();
+        internal List<string> Diagnostics = new();
 
-        internal SettingsViewModel CreateView() => new(Read, Change, Refresh, Errors.Add);
+        internal SettingsViewModel CreateView() => new(Read, Change, Refresh, Errors.Add, Diagnostics.Add);
 
         private StartupRegistrationState Read()
         {
@@ -297,7 +564,10 @@ public class StartupRegistrationTests
         private void Change(StartupRegistrationMode mode)
         {
             Changes++;
+            if (SavePreferenceBeforeWrite)
+                State = State with { Requested = mode != StartupRegistrationMode.Disabled };
             if (WriteFailure != null) throw WriteFailure;
+            if (DeferEnable && mode != StartupRegistrationMode.Disabled) return;
             if (!IgnoreWrites)
                 State = new(mode == StartupRegistrationMode.Program, mode == StartupRegistrationMode.Task);
         }

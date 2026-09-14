@@ -24,6 +24,7 @@ using System.Runtime.InteropServices;
 using System.Security.Principal;
 using System.Text;
 using Microsoft.Win32.TaskScheduler;
+using DS4Windows.Installation;
 using Task = Microsoft.Win32.TaskScheduler.Task;
 
 namespace DS4WinWPF
@@ -157,6 +158,18 @@ namespace DS4WinWPF
             }
         }
 
+        public static bool IsRunAtStartupRequested()
+        {
+            if (DS4Windows.PortableLabContext.IsActive) return false;
+            using WindowsIdentity identity = WindowsIdentity.GetCurrent();
+            string sid = identity.User?.Value ?? throw new InvalidOperationException(
+                "Windows did not provide the current account SID.");
+            return StartupRegistrationPolicy.ResolveRequestedStartup(
+                StartupSetupStore.ReadUserPreference(sid) ??
+                    StartupSetupStore.Read(sid)?.Requested,
+                ReadRegistrationState);
+        }
+
         public static void WriteStartProgEntry()
         {
             if (DS4Windows.PortableLabContext.IsActive) return;
@@ -279,12 +292,69 @@ namespace DS4WinWPF
             }
         }
 
-        internal static StartupRegistrationState ReadRegistrationState() =>
-            new(HasStartProgEntry(), HasTaskEntry());
+        internal static StartupRegistrationState ReadRegistrationState()
+        {
+            if (DS4Windows.PortableLabContext.IsActive) return default;
+            StartupRegistrationState state = default;
+            try
+            {
+                using WindowsIdentity identity = WindowsIdentity.GetCurrent();
+                string sid = identity.User?.Value ?? throw new InvalidOperationException(
+                    "Windows did not provide the current account SID.");
+                bool? userRequested = StartupSetupStore.ReadUserPreference(sid);
+                state = state with { Requested = userRequested };
+                StartupSetupState? setup = StartupSetupStore.Read(sid);
+                state = StartupRegistrationPolicy.ResolveState(false, false,
+                    userRequested, setup?.Requested, setup?.DeferredReason);
+                state = state with { Program = HasStartProgEntry() };
+                using TaskService service = new TaskService();
+                using Task task = service.GetTask(@"\RunDS4Windows");
+                state = state with { Task = TaskIsEnabled(task) && IsOwnedTask(task) };
+                if (!state.Requested.HasValue && !state.Enabled && task != null &&
+                    !TaskIsEnabled(task) && IsOwnedTask(task) &&
+                    string.Equals(task.Definition.RegistrationInfo.Description,
+                        StartupRegistrationPolicy.ManagedTaskDescription, StringComparison.Ordinal) &&
+                    TaskTargetsCurrentExecutable(task, requireEnabled: false))
+                {
+                    using var machine = Microsoft.Win32.RegistryKey.OpenBaseKey(
+                        Microsoft.Win32.RegistryHive.LocalMachine, Microsoft.Win32.RegistryView.Registry64);
+                    using var setupKey = machine.OpenSubKey(StartupSetupStore.MachinePath + "\\" + sid);
+                    using var infrastructure = machine.OpenSubKey(@"SOFTWARE\DS4Windows");
+                    state = StartupRegistrationPolicy.RecoverLegacySetupDeferral(state,
+                        hasSetupRecord: setupKey != null, exactOwnedDisabledTask: true,
+                        infrastructure?.GetValue("InfrastructureState") as string);
+                }
+                return state;
+            }
+            catch (Exception error)
+            {
+                return state with { ReadError = error.Message };
+            }
+        }
 
         internal static void SetRegistrationMode(StartupRegistrationMode mode)
         {
             if (DS4Windows.PortableLabContext.IsActive) return;
+            if (mode == StartupRegistrationMode.Disabled)
+            {
+                // Persist cancellation before task removal or UAC. A pending
+                // setup continuation must not undo an explicit user disable,
+                // including when Windows rejects removal of an existing task.
+                StartupSetupStore.WriteCurrentUserPreference(false);
+            }
+            else if (mode is StartupRegistrationMode.Program or StartupRegistrationMode.Task)
+            {
+                StartupRegistrationState state = ReadRegistrationState();
+                if (state.ReadError != null)
+                    throw new IOException(state.StatusText);
+                if (state.SetupDeferred)
+                {
+                    // Only setup can clear its dependency/reboot gate. Selecting
+                    // startup in Settings must not bypass it with a shortcut.
+                    StartupSetupStore.WriteCurrentUserPreference(true);
+                    return;
+                }
+            }
             // Check both owners before changing either registration. A name
             // collision is not permission to remove another program's task.
             EnsureShortcutOwnership();
@@ -309,6 +379,8 @@ namespace DS4WinWPF
                 default:
                     throw new ArgumentOutOfRangeException(nameof(mode));
             }
+            if (mode != StartupRegistrationMode.Disabled)
+                StartupSetupStore.WriteCurrentUserPreference(true);
         }
 
         private static void RunTaskHelper(string command)
@@ -333,9 +405,14 @@ namespace DS4WinWPF
             task.Enabled && task.Definition.Settings.Enabled &&
             task.Definition.Triggers.Count == 1 && task.Definition.Triggers[0].Enabled;
 
-        private static bool TaskNeedsRepair(Task task) => StartupRegistrationPolicy.ShouldRepairTask(
-            task != null, TaskIsEnabled(task), IsOwnedTask(task),
-            task != null && TaskTargetsCurrentExecutable(task));
+        private static bool TaskNeedsRepair(Task task)
+        {
+            StartupRegistrationState state = ReadRegistrationState();
+            return state.ReadError == null && StartupRegistrationPolicy.ShouldRepairTask(
+                task != null, TaskIsEnabled(task), IsOwnedTask(task),
+                task != null && TaskTargetsCurrentExecutable(task),
+                state.RunAtStartupRequested, state.SetupDeferred);
+        }
 
         private static bool IsOwnedTask(Task task)
         {
@@ -464,7 +541,7 @@ namespace DS4WinWPF
             }
         }
 
-        private static bool TaskTargetsCurrentExecutable(Task task)
+        private static bool TaskTargetsCurrentExecutable(Task task, bool requireEnabled = true)
         {
             if (task.Definition.Actions.Count != 1 ||
                 task.Definition.Actions[0] is not ExecAction action ||
@@ -476,13 +553,12 @@ namespace DS4WinWPF
 
             TaskDefinition definition = task.Definition;
             string currentUserSid = WindowsIdentity.GetCurrent().User?.Value;
-            return task.Enabled && definition.Settings.Enabled &&
+            return (!requireEnabled || TaskIsEnabled(task)) &&
                 definition.Principal.RunLevel == TaskRunLevel.Highest &&
                 definition.Principal.LogonType ==
                     TaskLogonType.InteractiveToken &&
                 AccountMatchesSid(definition.Principal.UserId,
                     currentUserSid) &&
-                trigger.Enabled &&
                 (string.IsNullOrWhiteSpace(trigger.UserId) ||
                  AccountMatchesSid(trigger.UserId, currentUserSid)) &&
                 definition.Settings.ExecutionTimeLimit == TimeSpan.Zero &&

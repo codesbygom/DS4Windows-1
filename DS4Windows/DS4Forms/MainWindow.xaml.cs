@@ -2601,6 +2601,7 @@ Suspend support not enabled.", true);
             }
 
             ViiperPrerequisiteStatus status = ViiperSetupManager.GetStatus(tryStartServer: false);
+            viiperStatusText.ToolTip = status.StartupPreferenceReadError;
             viiperStatusText.Text = $"{status.DisplayText}. " +
                 $"VIIPER helper: {(status.ViiperInstalled ? "installed" : "missing")}; " +
                 $"usbip-win2: {(status.UsbipInstalled ? "installed" : "missing")}; " +

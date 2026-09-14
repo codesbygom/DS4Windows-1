@@ -618,12 +618,16 @@
                                   ToolTip="Choose which profiles the two-finger swipe is allowed to switch between" />
                         </StackPanel>
                         <CheckBox x:Name="runAtStartCk" Content="{lex:Loc RunAtStartup}" Margin="{StaticResource spaceMargin}"
-                              IsEnabled="{Binding SystemIntegrationEnabled}"
+                              IsEnabled="{Binding CanChangeStartupPreference}"
                               IsChecked="{Binding RunAtStartup}"
-                              ToolTip="{lex:Loc Resources:RunAtStartup}" Click="RunAtStartCk_Click"
+                              ToolTip="Choose whether DS4Windows should open when you sign in to Windows. If setup is pending, your choice is saved and the message below explains the next step." Click="RunAtStartCk_Click"
                               Style="{StaticResource BridgeDescribedCheckBoxStyle}" />
+                        <TextBlock Text="{Binding StartupStatusText}" TextWrapping="Wrap"
+                                   Visibility="{Binding StartupStatusVisibility}"
+                                   MaxWidth="420" HorizontalAlignment="Left"
+                                   Margin="{StaticResource spaceMargin}" />
                         <GroupBox x:Name="runAsGroupBox" Header="{lex:Loc RunAs}" BorderThickness="2" Visibility="{Binding ShowRunStartPanel}"
-                              IsEnabled="{Binding SystemIntegrationEnabled}"
+                              IsEnabled="{Binding CanChangeStartupMode}"
                               Margin="{StaticResource spaceMargin}">
                             <StackPanel Orientation="Horizontal">
                                 <StackPanel>

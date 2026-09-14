@@ -17,9 +17,11 @@
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="WixToolset.BootstrapperApplicationApi" Version="5.0.2" />
+    <PackageReference Include="System.Management" Version="8.0.0" />
   </ItemGroup>
   <ItemGroup>
     <Resource Include="..\..\DS4Windows\DS4W.ico" Link="DS4W.ico" />
     <Compile Include="..\InstallerStartupTaskPolicy.cs" Link="InstallerStartupTaskPolicy.cs" />
+    <Compile Include="..\StartupSetupState.cs" Link="StartupSetupState.cs" />
   </ItemGroup>
 </Project>

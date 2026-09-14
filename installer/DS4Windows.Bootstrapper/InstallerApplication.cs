@@ -5,6 +5,7 @@ using System.IO;
 using System.Runtime.InteropServices;
 using System.Security.Principal;
 using System.Text;
+using System.Text.RegularExpressions;
 using System.Threading;
 using System.Windows;
 using System.Windows.Interop;
@@ -37,6 +38,7 @@ namespace DS4Windows.Bootstrapper
         private Mutex bundleMutex;
         private bool bundleMutexOwned;
         private int planStarted;
+        private bool requestedSetupResume;
 
         internal IEngine Engine => engine;
 
@@ -53,6 +55,24 @@ namespace DS4Windows.Bootstrapper
                 try
                 {
                     HookEvents();
+                    if ((command.CommandLine ?? "").Contains(Installation.StartupSetupRecovery.ResumeArgument,
+                            StringComparison.Ordinal))
+                    {
+                        Match resume = Regex.Match(command.CommandLine,
+                            @"^\s*--resume-startup-setup ([0-9a-f]{32})\s*$", RegexOptions.CultureInvariant);
+                        if (!resume.Success || command.Action != LaunchAction.Repair ||
+                            command.Relation != RelationType.None)
+                            throw new InvalidOperationException("The setup resume invocation is invalid.");
+                        if (!Installation.StartupSetupRecovery.TryClaimBundle(resume.Groups[1].Value,
+                                engine.GetVariableString("WixBundleProviderKey"), out _))
+                        {
+                            // A repeated logon in the same boot must not retry
+                            // the driver transaction or show another UAC prompt.
+                            engine.Quit(0);
+                            return;
+                        }
+                        requestedSetupResume = true;
+                    }
                     // Burn restores persisted variables when it resumes after a
                     // package-requested reboot. Preserve the user who started the
                     // transaction instead of replacing that identity with whichever
@@ -615,10 +635,10 @@ namespace DS4Windows.Bootstrapper
             // after a package-requested reboot. Resume that saved action
             // immediately, just as WixStdBA does, instead of presenting a new
             // confirmation page and leaving the chain half-finished.
-            if (command.Resume == ResumeType.Reboot)
+            if (command.Resume == ResumeType.Reboot || requestedSetupResume)
             {
                 if (!EnsureBundleMutex()) return;
-                var resumeAction = command.Action == LaunchAction.Unknown
+                var resumeAction = requestedSetupResume ? LaunchAction.Repair : command.Action == LaunchAction.Unknown
                     ? LaunchAction.Install
                     : command.Action;
                 StartPlan(resumeAction);

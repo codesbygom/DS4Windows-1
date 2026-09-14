@@ -42,7 +42,7 @@ namespace DS4Windows.SetupActions
                 var action = args.FirstOrDefault()?.Trim().ToLowerInvariant() ?? "install";
                 var installRoot = ReadArgument(args, "--install-root") ??
                     Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), "DS4Windows");
-                var bundleSource = ReadArgument(args, "--bundle-source");
+                var bundleId = ReadArgument(args, "--bundle-id");
 
                 if (action != "preflight")
                 {
@@ -60,7 +60,7 @@ namespace DS4Windows.SetupActions
                         break;
                     case "install":
                     case "repair":
-                        exitCode = InstallOrRepair(installRoot, bundleSource, args);
+                        exitCode = InstallOrRepair(installRoot, bundleId, args);
                         break;
                     case "uninstall":
                         exitCode = Uninstall(installRoot);
@@ -85,7 +85,7 @@ namespace DS4Windows.SetupActions
         }
 
         private static int InstallOrRepair(string installRoot,
-            string bundleSource, string[] args)
+            string bundleId, string[] args)
         {
             var ds4Path = Path.Combine(installRoot, "DS4Windows.exe");
             var extrasRoot = Path.Combine(installRoot, "extras");
@@ -100,12 +100,12 @@ namespace DS4Windows.SetupActions
                 ReadArgument(args, "--desktop-shortcut"), "0",
                 StringComparison.OrdinalIgnoreCase);
             return RunWithSetupMutex(() => InstallOrRepairLocked(ds4Path,
-                extrasRoot, scriptPath, bundleSource, targetUser,
+                extrasRoot, scriptPath, bundleId, targetUser,
                 desktopShortcut));
         }
 
         private static int InstallOrRepairLocked(string ds4Path,
-            string extrasRoot, string scriptPath, string bundleSource,
+            string extrasRoot, string scriptPath, string bundleId,
             InteractiveUser targetUser, bool desktopShortcut)
         {
             // Cleanup is mutation too: a concurrent repair may still need an
@@ -136,7 +136,6 @@ namespace DS4Windows.SetupActions
                 // highest-interactive task for a different standard user
                 // without storing credentials. Install everything and defer
                 // those two optional startup tasks instead of failing Burn.
-                arguments.Append(" -SkipStartupTasks");
                 WriteFallbackLog("Setup is elevated as " +
                     (WindowsIdentity.GetCurrent().Name ?? elevatedSid) +
                     "; startup task registration for " + targetUser.Name +
@@ -157,29 +156,33 @@ namespace DS4Windows.SetupActions
             }
             if (result == 3010)
             {
-                // Burn owns normal reboot resume. Its per-machine RunOnce entry
-                // does not execute for a standard user's logon, so add one
-                // target-user Startup shortcut only when setup was elevated
-                // with alternate administrator credentials.
-                if (alternateAdministrator)
+                // scheduleReboot reports success/restart-required to Burn; it
+                // does not retain Burn's RunOnce registration. Stage an exact,
+                // boot-gated continuation for the original user in both cases.
+                try
                 {
+                    StageRebootResume(Installation.SetupResumeBundleSource.Resolve(bundleId), bundleId, targetUser);
+                }
+                catch (Exception ex)
+                {
+                    WriteFallbackLog("Automatic setup resume could not be staged: " +
+                        ex.Message + ". Run Repair after restarting Windows.");
                     try
                     {
-                        StageRebootResume(bundleSource, targetUser);
+                        using var key = CreateMachineKey64(RegistryKeyPath);
+                        key?.SetValue("StartupTaskWarning", "Automatic setup resume could not be configured. Run Repair after restarting Windows.");
+                        key?.SetValue("StartupTaskWarningCorrelationId", CorrelationId);
                     }
-                    catch (Exception ex)
+                    catch (Exception warningError)
                     {
-                        // A reboot boundary has already been reached. Do not
-                        // turn optional auto-resume staging into a fatal error
-                        // that makes Burn roll back the installed application.
-                        WriteFallbackLog("Automatic standard-user resume could " +
-                            "not be staged: " + ex.Message +
-                            ". Burn remains resumable when setup is run again.");
+                        WriteFallbackLog("The setup resume warning could not be saved: " + warningError.Message);
                     }
                 }
             }
             else if (result == 0)
             {
+                try { Installation.StartupSetupRecovery.Clear(targetUser.Sid); }
+                catch (Exception ex) { WriteFallbackLog("Setup resume cleanup was deferred: " + ex.Message); }
                 ClearRebootResume();
                 try
                 {
@@ -370,6 +373,8 @@ namespace DS4Windows.SetupActions
         private static int UninstallLocked(string installRoot)
         {
             StopManagedProcesses(installRoot);
+            try { Installation.StartupSetupRecovery.ClearAll(); }
+            catch (Exception ex) { WriteFallbackLog("Setup resume cleanup was deferred: " + ex.Message); }
             RemoveOwnedTask("RunVIIPER", Path.Combine(installRoot, "VIIPER", "viiper.exe"),
                 Installation.InstallerStartupTaskPolicy.ViiperArguments);
             RemoveOwnedTask("RunDS4Windows", Path.Combine(installRoot, "DS4Windows.exe"), "-m");
@@ -596,7 +601,7 @@ namespace DS4Windows.SetupActions
                 StringComparison.OrdinalIgnoreCase);
         }
 
-        private static void StageRebootResume(string bundleSource,
+        private static void StageRebootResume(string bundleSource, string bundleId,
             InteractiveUser targetUser)
         {
             if (string.IsNullOrWhiteSpace(bundleSource) ||
@@ -606,20 +611,21 @@ namespace DS4Windows.SetupActions
                     "The original installer is unavailable for reboot resume.",
                     bundleSource);
             }
-            var resumeRoot = Path.Combine(
-                Environment.GetFolderPath(
-                    Environment.SpecialFolder.CommonApplicationData),
-                "DS4Windows", "Installer", "resume");
+            var snapshotId = Guid.NewGuid().ToString("N");
+            var snapshotRoot = Path.Combine(
+                Installation.StartupSetupRecovery.EnsureProtectedStagingRoot(targetUser.Sid), snapshotId);
+            EnsureDirectoryPathHasNoReparsePoints(snapshotRoot);
+            Directory.CreateDirectory(snapshotRoot);
+            Installation.StartupSetupRecovery.ProtectSnapshot(snapshotRoot, targetUser.Sid);
+            var resumeRoot = Path.Combine(snapshotRoot, "bundle");
             EnsureDirectoryPathHasNoReparsePoints(resumeRoot);
             Directory.CreateDirectory(resumeRoot);
             EnsureDirectoryPathHasNoReparsePoints(resumeRoot);
-            ProtectResumeDirectory(resumeRoot, targetUser.Sid);
             var stagedBundle = Path.Combine(resumeRoot, "DS4Windows_Setup_x64.exe");
-            if (!string.Equals(Path.GetFullPath(bundleSource),
-                    Path.GetFullPath(stagedBundle),
-                    StringComparison.OrdinalIgnoreCase))
+            using (var source = new FileStream(bundleSource, FileMode.Open, FileAccess.Read, FileShare.Read))
+            using (var destination = new FileStream(stagedBundle, FileMode.CreateNew, FileAccess.Write, FileShare.None))
             {
-                File.Copy(bundleSource, stagedBundle, true);
+                source.CopyTo(destination);
             }
             if (!HashesEqual(bundleSource, stagedBundle))
             {
@@ -627,32 +633,19 @@ namespace DS4Windows.SetupActions
                     "The reboot-resume installer copy failed verification.");
             }
 
-            var startupDirectory = Path.Combine(targetUser.RoamingAppData,
-                "Microsoft", "Windows", "Start Menu", "Programs", "Startup");
-            EnsureDirectoryPathHasNoReparsePoints(startupDirectory);
-            Directory.CreateDirectory(startupDirectory);
-            EnsureDirectoryPathHasNoReparsePoints(startupDirectory);
-            var shortcutPath = Path.Combine(startupDirectory,
-                "DS4Windows Setup Resume.lnk");
-            try
+            Installation.StartupSetupRecovery.Register(new Installation.StartupSetupResume
             {
-                CreateShortcut(shortcutPath, stagedBundle, "/repair",
-                    resumeRoot);
-                using (var key = CreateMachineKey64(RegistryKeyPath))
-                {
-                    key?.SetValue("SetupResumeShortcut", shortcutPath,
-                        RegistryValueKind.String);
-                }
-            }
-            catch
-            {
-                try
-                {
-                    if (File.Exists(shortcutPath)) File.Delete(shortcutPath);
-                }
-                catch { }
-                throw;
-            }
+                Id = Guid.NewGuid().ToString("N"), SnapshotId = snapshotId, BundleId = bundleId, Kind = "bundle",
+                TargetSid = targetUser.Sid, TargetName = targetUser.Name,
+                TargetLocalAppData = targetUser.LocalAppData,
+                TargetRoamingAppData = targetUser.RoamingAppData,
+                TargetExecutable = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles),
+                    "DS4Windows", "DS4Windows.exe"),
+                Executable = stagedBundle,
+                BootSessionId = Installation.StartupSetupRecovery.BootSessionId(),
+                StartupRequested = Installation.StartupSetupStore.ReadUserPreference(targetUser.Sid) ??
+                    Installation.StartupSetupStore.Read(targetUser.Sid)?.Requested ?? true,
+            });
         }
 
         private static void ClearRebootResume()
@@ -674,30 +667,24 @@ namespace DS4Windows.SetupActions
                     ex.Message);
             }
 
-            string shortcutPath = null;
+            string shortcutPath;
             try
             {
                 using (var key = OpenMachineKey64(
-                           RegistryKeyPath, writable: true))
+                           RegistryKeyPath))
                 {
-                    shortcutPath = key?.GetValue("SetupResumeShortcut") as string;
-                    key?.DeleteValue("SetupResumeShortcut", false);
+                    object marker = key?.GetValue("SetupResumeShortcut");
+                    if (marker != null && marker is not string)
+                        throw new InvalidDataException("The legacy shortcut marker is invalid.");
+                    shortcutPath = marker as string;
                 }
             }
             catch (Exception ex)
             {
-                WriteFallbackLog("Could not clear the resume shortcut marker: " +
+                WriteFallbackLog("Could not read the resume shortcut marker; preserved its cache: " +
                     ex.Message);
+                return;
             }
-            try
-            {
-                if (IsOwnedResumeShortcut(shortcutPath) &&
-                    File.Exists(shortcutPath))
-                {
-                    File.Delete(shortcutPath);
-                }
-            }
-            catch { }
 
             var resumeRoot = Path.Combine(
                 Environment.GetFolderPath(
@@ -708,6 +695,13 @@ namespace DS4Windows.SetupActions
                 EnsureDirectoryPathHasNoReparsePoints(resumeRoot);
                 var stagedBundle = Path.Combine(resumeRoot,
                     "DS4Windows_Setup_x64.exe");
+                if (!Installation.StartupSetupRecovery.RemoveLegacyShortcut(shortcutPath, stagedBundle))
+                {
+                    WriteFallbackLog("Preserved an unverified legacy setup shortcut and its resume cache.");
+                    return;
+                }
+                using (var key = OpenMachineKey64(RegistryKeyPath, writable: true))
+                    key?.DeleteValue("SetupResumeShortcut", false);
                 if (File.Exists(stagedBundle) &&
                     (File.GetAttributes(stagedBundle) &
                      FileAttributes.ReparsePoint) == 0)
@@ -755,34 +749,6 @@ namespace DS4Windows.SetupActions
             }
         }
 
-        private static void ProtectResumeDirectory(string resumeRoot,
-            string targetUserSid)
-        {
-            var ownerExit = RunCaptured(SystemTool("icacls.exe"),
-                Quote(resumeRoot) + " /setowner " +
-                Quote("*S-1-5-32-544") + " /Q",
-                TimeSpan.FromSeconds(15), out var ownerOutput);
-            if (ownerExit != 0)
-            {
-                throw new InvalidOperationException(
-                    "Could not secure ownership of the reboot-resume " +
-                    "directory: " + ownerOutput.Trim());
-            }
-            var arguments = Quote(resumeRoot) +
-                " /inheritance:r /grant:r " +
-                Quote("*S-1-5-18:(OI)(CI)(F)") + " " +
-                Quote("*S-1-5-32-544:(OI)(CI)(F)") + " " +
-                Quote("*" + targetUserSid + ":(OI)(CI)(RX)") + " /Q";
-            var exitCode = RunCaptured(SystemTool("icacls.exe"), arguments,
-                TimeSpan.FromSeconds(15), out var output);
-            if (exitCode != 0)
-            {
-                throw new InvalidOperationException(
-                    "Could not protect the reboot-resume directory: " +
-                    output.Trim());
-            }
-        }
-
         private static bool HashesEqual(string first, string second)
         {
             using (var algorithm = SHA256.Create())
@@ -794,24 +760,6 @@ namespace DS4Windows.SetupActions
                 var secondHash = algorithm.ComputeHash(secondStream);
                 return firstHash.SequenceEqual(secondHash);
             }
-        }
-
-        private static bool IsOwnedResumeShortcut(string path)
-        {
-            if (string.IsNullOrWhiteSpace(path) ||
-                !string.Equals(Path.GetFileName(path),
-                    "DS4Windows Setup Resume.lnk",
-                    StringComparison.OrdinalIgnoreCase))
-            {
-                return false;
-            }
-
-            var directory = Path.GetDirectoryName(Path.GetFullPath(path))?
-                .TrimEnd(Path.DirectorySeparatorChar);
-            var expectedSuffix = Path.Combine("Microsoft", "Windows",
-                "Start Menu", "Programs", "Startup");
-            return directory != null && directory.EndsWith(expectedSuffix,
-                StringComparison.OrdinalIgnoreCase);
         }
 
         private static void CreateShortcut(string shortcutPath,
