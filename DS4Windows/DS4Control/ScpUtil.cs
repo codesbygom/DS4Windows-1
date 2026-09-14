@@ -62,7 +62,7 @@ namespace DS4Windows
     public enum DS4Controls : byte { None, LXNeg, LXPos, LYNeg, LYPos, RXNeg, RXPos, RYNeg, RYPos, L1, L2, L3, R1, R2, R3, Square, Triangle, Circle, Cross, DpadUp, DpadRight, DpadDown, DpadLeft, PS, TouchLeft, TouchUpper, TouchMulti, TouchRight, Share, Options, Mute, FnL, FnR, BLP, BRP, GyroXPos, GyroXNeg, GyroZPos, GyroZNeg, SwipeLeft, SwipeRight, SwipeUp, SwipeDown, L2FullPull, R2FullPull, GyroSwipeLeft, GyroSwipeRight, GyroSwipeUp, GyroSwipeDown, Capture, SideL, SideR, LSOuter, RSOuter, TouchStarted, TouchEnded, Switch2C, Switch2JoyConLeftPaddle1, Switch2JoyConLeftPaddle2, Switch2JoyConRightPaddle1, Switch2JoyConRightPaddle2, Switch2JoyConLeftIrSensor, Switch2JoyConRightIrSensor, Switch2JoyConLeftSL, Switch2JoyConLeftSR, Switch2JoyConRightSL, Switch2JoyConRightSR };
     // Append new output actions after Unbound. Existing profile XML normally
     // uses names, but byte values also escape through mapping aliases.
-    public enum X360Controls : byte { None, LXNeg, LXPos, LYNeg, LYPos, RXNeg, RXPos, RYNeg, RYPos, LB, LT, LS, RB, RT, RS, X, Y, B, A, DpadUp, DpadRight, DpadDown, DpadLeft, Guide, Back, Start, TouchpadClick, LeftMouse, RightMouse, MiddleMouse, FourthMouse, FifthMouse, WUP, WDOWN, MouseUp, MouseDown, MouseLeft, MouseRight, AbsMouseUp, AbsMouseDown, AbsMouseLeft, AbsMouseRight, Unbound, WLEFT, WRIGHT };
+    public enum X360Controls : byte { None, LXNeg, LXPos, LYNeg, LYPos, RXNeg, RXPos, RYNeg, RYPos, LB, LT, LS, RB, RT, RS, X, Y, B, A, DpadUp, DpadRight, DpadDown, DpadLeft, Guide, Back, Start, TouchpadClick, LeftMouse, RightMouse, MiddleMouse, FourthMouse, FifthMouse, WUP, WDOWN, MouseUp, MouseDown, MouseLeft, MouseRight, AbsMouseUp, AbsMouseDown, AbsMouseLeft, AbsMouseRight, Unbound, WLEFT, WRIGHT, FlickStickCalibrate360LS, FlickStickCalibrate360RS };
 
     public enum SASteeringWheelEmulationAxisType : byte { None = 0, LX, LY, RX, RY, L2R2, VJoy1X, VJoy1Y, VJoy1Z, VJoy2X, VJoy2Y, VJoy2Z };
     public enum OutContType : uint
@@ -896,6 +896,8 @@ namespace DS4Windows
             [X360Controls.WDOWN] = "Mouse Wheel Down",
             [X360Controls.WLEFT] = "Mouse Wheel Left",
             [X360Controls.WRIGHT] = "Mouse Wheel Right",
+            [X360Controls.FlickStickCalibrate360LS] = "360° turn — left stick calibration",
+            [X360Controls.FlickStickCalibrate360RS] = "360° turn — right stick calibration",
             [X360Controls.MouseUp] = "Mouse Up",
             [X360Controls.MouseDown] = "Mouse Down",
             [X360Controls.MouseLeft] = "Mouse Left",
@@ -945,6 +947,8 @@ namespace DS4Windows
             [X360Controls.WDOWN] = "Mouse Wheel Down",
             [X360Controls.WLEFT] = "Mouse Wheel Left",
             [X360Controls.WRIGHT] = "Mouse Wheel Right",
+            [X360Controls.FlickStickCalibrate360LS] = "360° turn — left stick calibration",
+            [X360Controls.FlickStickCalibrate360RS] = "360° turn — right stick calibration",
             [X360Controls.MouseUp] = "Mouse Up",
             [X360Controls.MouseDown] = "Mouse Down",
             [X360Controls.MouseLeft] = "Mouse Left",
@@ -993,6 +997,8 @@ namespace DS4Windows
             [X360Controls.WDOWN] = "Mouse Wheel Down",
             [X360Controls.WLEFT] = "Mouse Wheel Left",
             [X360Controls.WRIGHT] = "Mouse Wheel Right",
+            [X360Controls.FlickStickCalibrate360LS] = "360° turn — left stick calibration",
+            [X360Controls.FlickStickCalibrate360RS] = "360° turn — right stick calibration",
             [X360Controls.MouseUp] = "Mouse Up",
             [X360Controls.MouseDown] = "Mouse Down",
             [X360Controls.MouseLeft] = "Mouse Left",
@@ -6363,6 +6369,8 @@ namespace DS4Windows
                 case "Mouse Wheel Down": return X360Controls.WDOWN;
                 case "Mouse Wheel Left": return X360Controls.WLEFT;
                 case "Mouse Wheel Right": return X360Controls.WRIGHT;
+                case "360° turn — left stick calibration": return X360Controls.FlickStickCalibrate360LS;
+                case "360° turn — right stick calibration": return X360Controls.FlickStickCalibrate360RS;
                 case "Mouse Up": return X360Controls.MouseUp;
                 case "Mouse Down": return X360Controls.MouseDown;
                 case "Mouse Left": return X360Controls.MouseLeft;
@@ -6420,6 +6428,8 @@ namespace DS4Windows
                 case X360Controls.WDOWN: return "Mouse Wheel Down";
                 case X360Controls.WLEFT: return "Mouse Wheel Left";
                 case X360Controls.WRIGHT: return "Mouse Wheel Right";
+                case X360Controls.FlickStickCalibrate360LS: return "360° turn — left stick calibration";
+                case X360Controls.FlickStickCalibrate360RS: return "360° turn — right stick calibration";
                 case X360Controls.MouseUp: return "Mouse Up";
                 case X360Controls.MouseDown: return "Mouse Down";
                 case X360Controls.MouseLeft: return "Mouse Left";

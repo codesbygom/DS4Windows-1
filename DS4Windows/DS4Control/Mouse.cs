@@ -194,7 +194,10 @@ namespace DS4Windows
         internal void PrepareGyroNeutralReport(bool terminal)
         {
             if (terminal)
+            {
+                Mapping.ResetFlickStickCalibration(deviceNum);
                 ResetToggleGyroModes();
+            }
             else
             {
                 Mapping.RequestPostMapStickReset(deviceNum);

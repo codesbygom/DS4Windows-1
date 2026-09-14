@@ -161,6 +161,35 @@ namespace DS4Windows.DS4Control
             eventLock.ExitWriteLock();
         }
 
+        public override void MoveRelativeMouseCalibration(int x, int y)
+        {
+            CalibrationMouseReports.ValidateMovement(x, y);
+            eventLock.EnterWriteLock();
+            try
+            {
+                var reports = new CalibrationMouseReports(
+                    mouseReport.MouseX, mouseReport.MouseY, x, y);
+                mouseReport.MouseX = reports.FirstX;
+                mouseReport.MouseY = reports.FirstY;
+                fakerInput.UpdateRelativeMouse(mouseReport);
+                // Reset also clears both wheels, while retaining held buttons.
+                // Only the first report may carry pending wheel events.
+                mouseReport.ResetMousePos();
+                if (reports.HasSecond)
+                {
+                    mouseReport.MouseX = reports.SecondX;
+                    mouseReport.MouseY = reports.SecondY;
+                    fakerInput.UpdateRelativeMouse(mouseReport);
+                    mouseReport.ResetMousePos();
+                }
+                syncRelativeMouse = false;
+            }
+            finally
+            {
+                eventLock.ExitWriteLock();
+            }
+        }
+
         /// <summary>
         /// Move the mouse cursor to an absolute position on the virtual desktop
         /// </summary>

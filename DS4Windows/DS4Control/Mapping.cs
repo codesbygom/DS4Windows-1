@@ -2315,6 +2315,57 @@ namespace DS4Windows
         /// </summary>
         static DS4Controls[] held = new DS4Controls[Global.MAX_DS4_CONTROLLER_COUNT];
 
+        private static readonly FlickStickCalibrationTurn[] flickCalibrationTurns =
+            new FlickStickCalibrationTurn[Global.MAX_DS4_CONTROLLER_COUNT];
+        private static readonly int[] flickCalibrationResetGenerations =
+            new int[Global.MAX_DS4_CONTROLLER_COUNT];
+
+        internal static void ResetFlickStickCalibration(int device)
+        {
+            if ((uint)device < flickCalibrationResetGenerations.Length)
+                Interlocked.Increment(ref flickCalibrationResetGenerations[device]);
+        }
+
+        internal static int AdvanceFlickStickCalibration(int device, Mouse mouse,
+            DS4Device source, long timestamp)
+        {
+            return flickCalibrationTurns[device].Advance(timestamp,
+                Global.ReadProfileSwitchRevision(device),
+                Volatile.Read(ref flickCalibrationResetGenerations[device]),
+                mouse, outputKBMHandler,
+                source != null && ReferenceEquals(mouse?.BoundDevice, source) &&
+                    source.Synced && !source.IsRemoving && !source.IsRemoved,
+                Global.LSOutputSettings[device].outputSettings.flickSettings.realWorldCalibration,
+                Global.RSOutputSettings[device].outputSettings.flickSettings.realWorldCalibration);
+        }
+
+        internal static void SendMouseMovementWithCalibration(int x, int y, int calibration)
+        {
+            var handler = outputKBMHandler;
+            // Gyro/touch callbacks can already have a relative move pending.
+            // FakerInput assigns rather than adds, so preserve that move before
+            // staging a calibration-bearing report. No-calibration is unchanged.
+            if (calibration != 0) handler.Sync();
+            long combined = (long)x + calibration;
+            if (calibration != 0 && (combined < -32767 || combined > 32767 ||
+                y < -32767 || y > 32767))
+            {
+                // FakerInput buffers and overwrites successive Move calls.
+                // Flush the ordinary move before a bounded calibration move
+                // when they cannot share its signed-16-bit report field.
+                if (x != 0 || y != 0)
+                {
+                    handler.MoveRelativeMouse(x, y);
+                    handler.Sync();
+                }
+                handler.MoveRelativeMouseCalibration(calibration, 0);
+            }
+            else if (calibration != 0)
+                handler.MoveRelativeMouseCalibration((int)combined, y);
+            else if (combined != 0 || y != 0)
+                handler.MoveRelativeMouse((int)combined, y);
+        }
+
         /*static double previousPointerX = 0.0;
         //double accelHelperX = 0.0;
         //double accelTravelX = 0.0;
@@ -2340,6 +2391,14 @@ namespace DS4Windows
         public static void MapCustom(int device, DS4State cState, DS4State MappedState, DS4StateExposed eState,
             Mouse tp, ControlService ctrl)
         {
+            MapCustom(device, cState, MappedState, eState, tp, ctrl, Stopwatch.GetTimestamp());
+        }
+
+        // Deterministic clock seam for the same production mapper; tests never
+        // need to sleep or inject input into Windows to verify a camera turn.
+        internal static void MapCustom(int device, DS4State cState, DS4State MappedState, DS4StateExposed eState,
+            Mouse tp, ControlService ctrl, long calibrationTimestamp)
+        {
             /* TODO: This method is slow sauce. Find ways to speed up action execution */
             double tempMouseDeltaX = 0.0;
             double tempMouseDeltaY = 0.0;
@@ -2348,6 +2407,7 @@ namespace DS4Windows
             absMouseOut.Dirty = false;
             int mouseDeltaX = 0;
             int mouseDeltaY = 0;
+            flickCalibrationTurns[device].BeginFrame();
             switch2MappedStickMouseFrames[device] = default;
 
             cState.calculateStickAngles();
@@ -3045,10 +3105,9 @@ namespace DS4Windows
 
             calculateFinalMouseMovement(ref tempMouseDeltaX, ref tempMouseDeltaY,
                 out mouseDeltaX, out mouseDeltaY);
-            if (mouseDeltaX != 0 || mouseDeltaY != 0)
-            {
-                outputKBMHandler.MoveRelativeMouse(mouseDeltaX, mouseDeltaY);
-            }
+            int calibrationDelta = AdvanceFlickStickCalibration(device, tp,
+                ctrl.DS4Controllers[device], calibrationTimestamp);
+            SendMouseMovementWithCalibration(mouseDeltaX, mouseDeltaY, calibrationDelta);
             if (switch2IrMouseWheelDelta != 0 ||
                 switch2IrMouseHorizontalWheelDelta != 0)
             {
@@ -3941,6 +4000,17 @@ namespace DS4Windows
 
                     X360Controls xboxControl = X360Controls.None;
                     xboxControl = (X360Controls)action.actionBtn;
+                    if (xboxControl is X360Controls.FlickStickCalibrate360LS or
+                        X360Controls.FlickStickCalibrate360RS)
+                    {
+                        if (GetBoolActionMappingForMappedAction(device,
+                            dcs.control, cState, eState, tp, fieldMapping,
+                            switch2DirectionTapEligible))
+                            flickCalibrationTurns[device].Press(
+                                xboxControl == X360Controls.FlickStickCalibrate360RS);
+                        ResetToDefaultValue(dcs.control, MappedState, outputfieldMapping);
+                        return; // Always one-shot, even if an old profile has Toggle set.
+                    }
                     if (xboxControl >= X360Controls.LXNeg && xboxControl <= X360Controls.Start)
                     {
                         DS4Controls tempDS4Control = reverseX360ButtonMapping[(int)xboxControl];

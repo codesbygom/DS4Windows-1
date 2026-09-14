@@ -641,6 +641,26 @@
                         <Button x:Name="absMouseRightBindBtn" Content="{lex:Loc BindingWin.AbsMouseRight}" Margin="0,8,0,0" />
                     </StackPanel>
                 </TabItem>
+                <TabItem x:Name="flickStickCalibrationTab" Header="Flick-stick calibration">
+                    <Grid Margin="8">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <StackPanel VerticalAlignment="Top">
+                            <Button x:Name="flickStickCalibrate360LSBtn" Padding="10,6"
+                                    Content="360° turn — left stick calibration" />
+                            <Button x:Name="flickStickCalibrate360RSBtn" Padding="10,6" Margin="0,8,0,0"
+                                    Content="360° turn — right stick calibration" />
+                        </StackPanel>
+                        <StackPanel Grid.Column="1" Margin="16,0,0,0" MaxWidth="430" HorizontalAlignment="Left">
+                            <TextBlock TextWrapping="Wrap"
+                                       Text="Bind either action, save the profile, then tap the bound button in a game using mouse look. Each tap tests one full camera turn over about one second using the selected stick's Real World Calibration." />
+                            <TextBlock Margin="0,8,0,0" TextWrapping="Wrap"
+                                       Text="In Axis Config → the selected stick's Flick Stick settings, increase Real World Calibration if the turn undershoots 360°; decrease it if the turn overshoots. Release the button before testing again." />
+                        </StackPanel>
+                    </Grid>
+                </TabItem>
             </TabControl>
 
         </DockPanel>

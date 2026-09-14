@@ -54,6 +54,16 @@ namespace DS4Windows.DS4Control
             Sync();
         }
 
+        /// <summary>
+        /// Immediately presents bounded calibration counts. Buffered backends
+        /// preserve any pending movement without clipping or interleaved writes.
+        /// </summary>
+        public virtual void MoveRelativeMouseCalibration(int x, int y)
+        {
+            CalibrationMouseReports.ValidateMovement(x, y);
+            MoveRelativeMouseImmediate(x, y);
+        }
+
         public abstract void MoveAbsoluteMouse(double x, double y);
 
         public abstract void PerformMouseWheelEvent(int vertical, int horizontal);

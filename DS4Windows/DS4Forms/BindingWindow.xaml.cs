@@ -112,6 +112,7 @@ namespace DS4WinWPF.DS4Forms
                 macroOnLb.Visibility = Visibility.Collapsed;
                 recordMacroBtn.Visibility = Visibility.Collapsed;
                 mouseCanvas.Visibility = Visibility.Collapsed;
+                flickStickCalibrationTab.Visibility = Visibility.Collapsed;
                 bottomPanel.Visibility = Visibility.Collapsed;
                 extrasSidePanel.Visibility = Visibility.Collapsed;
                 mouseGridColumn.Width = new GridLength(0);
@@ -354,6 +355,14 @@ namespace DS4WinWPF.DS4Forms
                 {
                     binding.outputType = OutBinding.OutType.Button;
                     binding.control = bind.control;
+                    if (bind.control is X360Controls.FlickStickCalibrate360LS or
+                        X360Controls.FlickStickCalibrate360RS)
+                    {
+                        // Calibration is a single turn per tap. Keyboard
+                        // options must not carry into this mouse action.
+                        binding.Toggle = false;
+                        binding.HasScanCode = false;
+                    }
                 }
             }
 
@@ -418,6 +427,11 @@ namespace DS4WinWPF.DS4Forms
                 {
                     if (mouseBtnMap.TryGetValue(binding.control, out Button tempBtn))
                     {
+                        if (binding.control is X360Controls.FlickStickCalibrate360LS or
+                            X360Controls.FlickStickCalibrate360RS)
+                        {
+                            flickStickCalibrationTab.IsSelected = true;
+                        }
                         tempBtn.Background = new SolidColorBrush(Colors.LimeGreen);
                         highlightBtn = tempBtn;
                     }
@@ -581,6 +595,13 @@ namespace DS4WinWPF.DS4Forms
             associatedBindings.Add(mouseWheelRBtn,
                 new BindAssociation() { outputType = BindAssociation.OutType.Button, control = DS4Windows.X360Controls.WRIGHT });
             mouseWheelRBtn.Click += OutputButtonBtn_Click;
+
+            associatedBindings.Add(flickStickCalibrate360LSBtn,
+                new BindAssociation() { outputType = BindAssociation.OutType.Button, control = DS4Windows.X360Controls.FlickStickCalibrate360LS });
+            flickStickCalibrate360LSBtn.Click += OutputButtonBtn_Click;
+            associatedBindings.Add(flickStickCalibrate360RSBtn,
+                new BindAssociation() { outputType = BindAssociation.OutType.Button, control = DS4Windows.X360Controls.FlickStickCalibrate360RS });
+            flickStickCalibrate360RSBtn.Click += OutputButtonBtn_Click;
 
 
             associatedBindings.Add(absMouseUpBindBtn,

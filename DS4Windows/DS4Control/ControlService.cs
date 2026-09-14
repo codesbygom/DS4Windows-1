@@ -796,7 +796,8 @@ namespace DS4Windows
             return (outputControl >= X360Controls.LeftMouse &&
                     outputControl < X360Controls.Unbound) ||
                 outputControl is X360Controls.WLEFT or
-                    X360Controls.WRIGHT;
+                    X360Controls.WRIGHT or X360Controls.FlickStickCalibrate360LS or
+                    X360Controls.FlickStickCalibrate360RS;
         }
 
         private static void RefreshLoadedActionAliases()
@@ -4318,6 +4319,7 @@ namespace DS4Windows
 
             // Reset current flick stick progress from previous profile
             Mapping.flickMappingData[ind].Reset();
+            Mapping.ResetFlickStickCalibration(ind);
 
             // Reset delta accel processors for sticks
             Mapping.deltaAccelProcessors[ind].LSProcessor.Reset();
@@ -4754,6 +4756,7 @@ namespace DS4Windows
             device.IsRemoved = true;
             device.Synced = false;
             Mapping.RequestPostMapStickReset(index);
+            Mapping.ResetFlickStickCalibration(index);
             oscState[index] = new DS4State();
             slotManager.RemoveController(device, index);
             if (isUsingOSCSender())
@@ -5896,6 +5899,7 @@ namespace DS4Windows
                     // or a profile without mapping). Do not replay this report's
                     // deferred gyro/touch contribution when mapping resumes.
                     Mapping.DiscardPostMapStickData(ind);
+                    Mapping.ResetFlickStickCalibration(ind);
                 }
 
                 if (!useDInputOnly[ind])

@@ -20,6 +20,9 @@
 
   <ItemGroup>
     <ProjectReference Include="..\DS4Windows\DS4WinWPF.csproj" />
+    <Reference Include="FakerInputWrapper">
+      <HintPath>..\DS4Windows\libs\$(Platform)\FakerInputWrapper\FakerInputWrapper.dll</HintPath>
+    </Reference>
     <Compile Include="..\installer\DS4Windows.Bootstrapper\UninstallHelperPackagePlan.cs" Link="UninstallHelperPackagePlan.cs" />
     <Compile Include="..\installer\DS4Windows.SetupActions\SetupMutationOwnership.cs" Link="SetupMutationOwnership.cs" />
     <Compile Include="..\utils\Switch2BluetoothAudioProbe\ProbeProtocol.cs" Link="ProbeProtocol.cs" />

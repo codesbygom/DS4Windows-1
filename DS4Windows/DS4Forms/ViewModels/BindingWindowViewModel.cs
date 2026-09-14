@@ -282,7 +282,9 @@ namespace DS4WinWPF.DS4Forms.ViewModels
         {
             return (control >= X360Controls.LeftMouse &&
                 control < X360Controls.Unbound) ||
-                control is X360Controls.WLEFT or X360Controls.WRIGHT;
+                control is X360Controls.WLEFT or X360Controls.WRIGHT or
+                    X360Controls.FlickStickCalibrate360LS or
+                    X360Controls.FlickStickCalibrate360RS;
         }
     }
 
@@ -609,7 +611,9 @@ namespace DS4WinWPF.DS4Forms.ViewModels
         {
             return (control >= X360Controls.LeftMouse &&
                 control < X360Controls.Unbound) ||
-                control is X360Controls.WLEFT or X360Controls.WRIGHT;
+                control is X360Controls.WLEFT or X360Controls.WRIGHT or
+                    X360Controls.FlickStickCalibrate360LS or
+                    X360Controls.FlickStickCalibrate360RS;
         }
 
         public void ParseExtras(string extras)
