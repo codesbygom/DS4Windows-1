@@ -3823,12 +3823,17 @@ namespace DS4Windows
             bool switch2ModeShiftConfigured = dcs.shiftTrigger ==
                     SWITCH2_MODE_SHIFT_TRIGGER &&
                 dcs.HasAnySwitch2ModeShiftAction;
-            bool shiftActive =
-                (dcs.shiftActionType !=
+            bool shiftActionConfigured =
+                dcs.shiftActionType !=
                     DS4ControlSettings.ActionType.Default ||
-                 switch2ModeShiftConfigured) &&
+                switch2ModeShiftConfigured;
+            bool shiftTriggerActive =
+                (shiftActionConfigured || !dcs.IsExtrasEmpty(dcs.shiftExtras)) &&
                 ShiftTrigger(dcs.shiftTrigger, device, cState, eState, tp,
                     fieldMapping);
+            // An extras-only shift changes the extras, while the normal
+            // output binding continues unless a shifted action overrides it.
+            bool shiftActive = shiftActionConfigured && shiftTriggerActive;
             Switch2ModeShiftAction modeShiftAction = null;
             if (shiftActive && dcs.shiftTrigger ==
                     SWITCH2_MODE_SHIFT_TRIGGER)
@@ -3878,9 +3883,9 @@ namespace DS4Windows
             {
                 string selectedShiftExtras = modeShiftAction?.Extras ??
                     dcs.shiftExtras;
-                bool shiftE = shiftActive &&
+                bool shiftE = shiftTriggerActive &&
                     !dcs.IsExtrasEmpty(selectedShiftExtras);
-                bool regE = !shiftActive && !dcs.IsExtrasEmpty(dcs.extras);
+                bool regE = !shiftTriggerActive && !dcs.IsExtrasEmpty(dcs.extras);
                 if ((regE || shiftE) &&
                     GetBoolActionMappingForMappedAction(device,
                         dcs.control, cState, eState, tp, fieldMapping,
@@ -3933,7 +3938,7 @@ namespace DS4Windows
                     }
                     catch { }
                 }
-                else if ((regE || shiftE) && held[device] == dcs.control)
+                else if (held[device] == dcs.control)
                 {
                     DS4LightBar.forcelight[device] = false;
                     DS4LightBar.forcedFlash[device] = 0;

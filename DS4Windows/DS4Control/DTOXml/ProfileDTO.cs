@@ -3835,6 +3835,16 @@ namespace DS4WinWPF.DS4Control.DTOXml
                     {
                         destination.UpdateDS4CExtra(deviceIndex,
                             pair.Key.ToString(), true, pair.Value);
+                        // Extras may be the only shifted binding. In that
+                        // case no Button/Key/Macro node restores the trigger.
+                        DS4ControlSettings setting = destination.GetDS4CSetting(
+                            deviceIndex, pair.Key);
+                        if (setting != null && setting.shiftTrigger == 0 &&
+                            ShiftControl.Extras.ShiftTriggers.TryGetValue(
+                                pair.Key, out int shiftT) && shiftT > 0)
+                        {
+                            setting.shiftTrigger = shiftT;
+                        }
                     }
                 }
 
