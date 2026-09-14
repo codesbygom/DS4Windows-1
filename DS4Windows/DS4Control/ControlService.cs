@@ -5107,6 +5107,16 @@ namespace DS4Windows
                 return;
             }
 
+            // A queued Home action or timer decision may precede a completed
+            // profile change. Recheck eligibility under the routing lock before
+            // creating a companion or neutralizing the current native output.
+            if (!ShouldUseGameBarControllerCompatibility(
+                    Global.GameBarControllerCompatibility[index],
+                    Global.OutContType[index], getDInputOnly(index)))
+            {
+                return;
+            }
+
             DS4Device source = DS4Controllers[index];
             OutputDevice nativeOutput = outputDevices[index];
             if (source == null || nativeOutput == null)

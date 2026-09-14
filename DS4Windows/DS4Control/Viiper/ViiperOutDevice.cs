@@ -5920,6 +5920,7 @@ namespace DS4Windows
                 $"controlDropped={feedbackDispatchBuffer.ControlDropped} " +
                 $"hapticsQueued={feedbackDispatchBuffer.OrderedControlEnqueued} " +
                 $"nativeRepeatsSuppressed={feedbackDispatchBuffer.OrderedControlRepeated} " +
+                $"nintendoControlRepeatsSuppressed={feedbackDispatchBuffer.OrderedControlNintendoRepeated} " +
                 $"nativeAdmissionWaits={Interlocked.Read(ref feedbackNativeAdmissionWaits)} " +
                 $"nativeAdmissionWaitMaxMs={StopwatchTicksToMilliseconds(Interlocked.Read(ref feedbackNativeAdmissionMaximumWaitTicks)):F2} " +
                 $"hapticsDequeued={feedbackDispatchBuffer.OrderedControlDequeued} " +
@@ -6145,11 +6146,8 @@ namespace DS4Windows
                                         readStreamGeneration, framedPayload,
                                         payloadLength, targetDeviceIndex, nativeContext) :
                                     IsDualSenseType() ?
-                                    feedbackDispatchBuffer
-                                        .TryEnqueueOrderedControl(
-                                            framedPayload, payloadLength,
-                                            readStreamGeneration,
-                                            targetDeviceIndex) :
+                                    QueueTranslatedDualSenseControl(framedPayload,
+                                        payloadLength, readStreamGeneration, targetDeviceIndex) :
                                     feedbackDispatchBuffer.QueueControl(
                                         framedPayload, payloadLength,
                                         readStreamGeneration,
@@ -6451,6 +6449,52 @@ namespace DS4Windows
                 if (deviceIndex != Volatile.Read(ref lastInputDeviceIndex) ||
                     target == null || !IsNativeDualSenseFeedbackCompatible(target)) return false;
                 context = new(target, Interlocked.Read(ref physicalControllerBindingRevision),
+                    Global.ReadProfileSwitchRevision(deviceIndex), feedbackDispatchBuffer.PendingBoundaryRevision);
+                return true;
+            }
+        }
+
+        internal bool QueueTranslatedDualSenseControl(byte[] feedback, int length,
+            long generation, int deviceIndex)
+        {
+            _ = TryCaptureNintendoPendingControlContext(feedback, length, deviceIndex, out var context);
+            return feedbackDispatchBuffer.TryEnqueueOrderedControl(feedback, length,
+                generation, deviceIndex, nintendoContext: context);
+        }
+
+        private bool TryCaptureNintendoPendingControlContext(byte[] feedback, int length,
+            int deviceIndex, out ViiperPendingNintendoControlContext context)
+        {
+            context = default;
+            if (audioOnlySidecar || !IsDualSenseType() || feedback == null ||
+                length <= 0 || length > feedback.Length ||
+                !DualSenseNativeFeedbackRepeatPolicy.IsRepeatable(feedback.AsSpan(0, length)) ||
+                Program.rootHub == null || deviceIndex < 0 ||
+                deviceIndex >= Program.rootHub.DS4Controllers.Length ||
+                deviceIndex >= Global.EnableOutputDataToDS4.Length ||
+                Program.rootHub.DS4Controllers[deviceIndex] is not Switch2RuntimeInputDevice target)
+                return false;
+            var session = Volatile.Read(ref switch2FeedbackSession);
+            if (session == null || session.IsRetired || GetSwitch2RumbleDelayMilliseconds(deviceIndex) != 0 ||
+                !target.TryGetFeedbackBinding(out ulong deviceGeneration, out ulong transportGeneration)) return false;
+
+            // Read the runtime binding before taking callback admission: its
+            // publication lock also serves physical input. No nested runtime
+            // lock or physical I/O is allowed under this short output boundary.
+            lock (feedbackCallbackAdmissionLock)
+            {
+                if (!connected || feedbackDispatchStopRequested ||
+                    deviceIndex != Volatile.Read(ref lastInputDeviceIndex) ||
+                    !ReferenceEquals(Program.rootHub.DS4Controllers[deviceIndex], target) ||
+                    !ReferenceEquals(Volatile.Read(ref switch2FeedbackSession), session) ||
+                    session.IsRetired || target.IsDisconnecting || target.IsRemoving || target.IsRemoved ||
+                    !Volatile.Read(ref Global.EnableOutputDataToDS4[deviceIndex]) ||
+                    GetSwitch2RumbleDelayMilliseconds(deviceIndex) != 0) return false;
+                // A joined pair uses RuntimeGeneration/pairEpoch; a standalone
+                // target uses its physical device/transport generations. Session
+                // identity additionally fences teardown, rejoin and stream reuse.
+                context = new(target, session, deviceGeneration, transportGeneration,
+                    Interlocked.Read(ref physicalControllerBindingRevision),
                     Global.ReadProfileSwitchRevision(deviceIndex), feedbackDispatchBuffer.PendingBoundaryRevision);
                 return true;
             }

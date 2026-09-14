@@ -18,6 +18,16 @@ namespace DS4Windows
         object Target, long BindingRevision, long ProfileRevision,
         long PendingBoundaryRevision);
 
+    // Eligibility metadata only. This never turns translated Nintendo feedback
+    // into a raw Sony command or changes its existing real-time age/overflow policy.
+    internal readonly record struct ViiperPendingNintendoControlContext(
+        object Target, object Session, ulong DeviceGeneration, ulong TransportGeneration,
+        long BindingRevision, long ProfileRevision, long PendingBoundaryRevision)
+    {
+        internal bool IsBound => Target != null && Session != null &&
+            DeviceGeneration != 0 && TransportGeneration != 0;
+    }
+
     /// <summary>
     /// Preallocated hand-off between VIIPER's framed TCP reader and the
     /// potentially blocking physical-controller feedback paths. Speaker PCM
@@ -48,6 +58,8 @@ namespace DS4Windows
         private readonly bool[] orderedControlNativeCommands;
         private readonly long[] orderedControlAdmissionRevisions;
         private readonly ViiperNativeCommandContext[] orderedControlNativeContexts;
+        private readonly ViiperPendingNintendoControlContext[] orderedControlNintendoContexts;
+        private readonly long[] orderedControlNintendoLastReceiptTimestamps;
         private readonly long orderedControlMaximumAgeTicks;
         private int speakerReadIndex;
         private int speakerWriteIndex;
@@ -74,6 +86,7 @@ namespace DS4Windows
         private long orderedControlDropped;
         private long orderedControlExpired;
         private long orderedControlRepeated;
+        private long orderedControlNintendoRepeated;
         private long orderedControlHighWater;
         private long orderedControlMaximumQueueAgeTicks;
         private long controlAdmissionRevision;
@@ -137,6 +150,8 @@ namespace DS4Windows
             orderedControlNativeCommands = new bool[orderedControlCapacity];
             orderedControlAdmissionRevisions = new long[orderedControlCapacity];
             orderedControlNativeContexts = new ViiperNativeCommandContext[orderedControlCapacity];
+            orderedControlNintendoContexts = new ViiperPendingNintendoControlContext[orderedControlCapacity];
+            orderedControlNintendoLastReceiptTimestamps = new long[orderedControlCapacity];
             if (orderedControlMaximumAgeMilliseconds < 0)
             {
                 throw new ArgumentOutOfRangeException(
@@ -197,6 +212,9 @@ namespace DS4Windows
             Interlocked.Read(ref orderedControlExpired);
         internal long OrderedControlRepeated =>
             Interlocked.Read(ref orderedControlRepeated);
+
+        internal long OrderedControlNintendoRepeated =>
+            Interlocked.Read(ref orderedControlNintendoRepeated);
         internal long OrderedControlHighWater =>
             Interlocked.Read(ref orderedControlHighWater);
         internal long ControlAdmissionRevision
@@ -368,7 +386,8 @@ namespace DS4Windows
         internal bool TryEnqueueOrderedControl(byte[] source, int length,
             long generation, int deviceIndex, bool nativeCommand = false,
             long? expectedBoundaryRevision = null,
-            ViiperNativeCommandContext nativeContext = default)
+            ViiperNativeCommandContext nativeContext = default,
+            ViiperPendingNintendoControlContext nintendoContext = default)
         {
             if (source == null)
             {
@@ -396,6 +415,15 @@ namespace DS4Windows
                     Interlocked.Increment(ref orderedControlRepeated);
                     return true;
                 }
+                bool nintendoRepeatable = !nativeCommand && nintendoContext.IsBound &&
+                    nintendoContext.PendingBoundaryRevision == pendingBoundaryRevision &&
+                    DualSenseNativeFeedbackRepeatPolicy.IsRepeatable(source.AsSpan(0, length));
+                if (nintendoRepeatable && TryFoldPendingNintendoTailRepeat(source, length,
+                        generation, deviceIndex, nintendoContext))
+                {
+                    Interlocked.Increment(ref orderedControlNintendoRepeated);
+                    return true;
+                }
                 if (orderedControlCount == orderedControlSlots.Length)
                 {
                     // A raw HID command is a validity-masked delta, not PCM.
@@ -411,6 +439,8 @@ namespace DS4Windows
                     orderedControlDeviceIndexes[orderedControlReadIndex] = -1;
                     orderedControlEnqueueTimestamps[
                         orderedControlReadIndex] = 0;
+                    orderedControlNintendoContexts[orderedControlReadIndex] = default;
+                    orderedControlNintendoLastReceiptTimestamps[orderedControlReadIndex] = 0;
                     orderedControlReadIndex =
                         (orderedControlReadIndex + 1) %
                         orderedControlSlots.Length;
@@ -431,7 +461,10 @@ namespace DS4Windows
                 orderedControlNativeCommands[orderedControlWriteIndex] = nativeCommand;
                 orderedControlAdmissionRevisions[orderedControlWriteIndex] = controlAdmissionRevision;
                 orderedControlNativeContexts[orderedControlWriteIndex] = nativeContext;
-                repeatableNativeTailRevision = repeatable ? controlAdmissionRevision : 0;
+                orderedControlNintendoContexts[orderedControlWriteIndex] = nintendoContext;
+                orderedControlNintendoLastReceiptTimestamps[orderedControlWriteIndex] = nintendoRepeatable ?
+                    orderedControlEnqueueTimestamps[orderedControlWriteIndex] : 0;
+                repeatableNativeTailRevision = repeatable || nintendoRepeatable ? controlAdmissionRevision : 0;
                 orderedControlWriteIndex = (orderedControlWriteIndex + 1) %
                     orderedControlSlots.Length;
                 orderedControlCount++;
@@ -485,6 +518,8 @@ namespace DS4Windows
                 orderedControlDeviceIndexes[orderedControlReadIndex] = -1;
                 orderedControlEnqueueTimestamps[
                     orderedControlReadIndex] = 0;
+                orderedControlNintendoContexts[orderedControlReadIndex] = default;
+                orderedControlNintendoLastReceiptTimestamps[orderedControlReadIndex] = 0;
                 orderedControlReadIndex = (orderedControlReadIndex + 1) %
                     orderedControlSlots.Length;
                 orderedControlCount--;
@@ -517,6 +552,43 @@ namespace DS4Windows
                 previous.PendingBoundaryRevision == context.PendingBoundaryRevision &&
                 source.AsSpan(0, length).SequenceEqual(orderedControlSlots[tail].AsSpan(0, length));
         }
+
+        private bool TryFoldPendingNintendoTailRepeat(byte[] source, int length,
+            long generation, int deviceIndex, in ViiperPendingNintendoControlContext context)
+        {
+            if (orderedControlCount == 0 || repeatableNativeTailRevision == 0 ||
+                repeatableNativeTailRevision != controlAdmissionRevision) return false;
+            int tail = (orderedControlWriteIndex + orderedControlSlots.Length - 1) %
+                orderedControlSlots.Length;
+            // Unlike retained raw Sony commands, this lane has a real-time age
+            // budget. A fresh repeat must not disappear into an expired entry.
+            long now = Stopwatch.GetTimestamp();
+            if (orderedControlMaximumAgeTicks > 0 && now -
+                    OrderedControlExpiryTimestamp(tail) > orderedControlMaximumAgeTicks) return false;
+            ViiperPendingNintendoControlContext previous = orderedControlNintendoContexts[tail];
+            bool identical = !orderedControlNativeCommands[tail] && previous.IsBound &&
+                orderedControlAdmissionRevisions[tail] == repeatableNativeTailRevision &&
+                orderedControlLengths[tail] == length &&
+                orderedControlGenerations[tail] == generation &&
+                orderedControlDeviceIndexes[tail] == deviceIndex &&
+                ReferenceEquals(previous.Target, context.Target) &&
+                ReferenceEquals(previous.Session, context.Session) &&
+                previous.DeviceGeneration == context.DeviceGeneration &&
+                previous.TransportGeneration == context.TransportGeneration &&
+                previous.BindingRevision == context.BindingRevision &&
+                previous.ProfileRevision == context.ProfileRevision &&
+                previous.PendingBoundaryRevision == context.PendingBoundaryRevision &&
+                source.AsSpan(0, length).SequenceEqual(orderedControlSlots[tail].AsSpan(0, length));
+            // The fresh identical receipt would have survived in the original
+            // newest-window lane. Retain that liveness without changing the
+            // original admission time used by queue-age diagnostics or order.
+            if (identical) orderedControlNintendoLastReceiptTimestamps[tail] = now;
+            return identical;
+        }
+
+        private long OrderedControlExpiryTimestamp(int index) =>
+            orderedControlNintendoLastReceiptTimestamps[index] != 0 ?
+                orderedControlNintendoLastReceiptTimestamps[index] : orderedControlEnqueueTimestamps[index];
 
         internal void InvalidateNativeRepeat()
         {
@@ -570,6 +642,8 @@ namespace DS4Windows
                 orderedControlNativeCommands[orderedControlReadIndex] = false;
                 orderedControlAdmissionRevisions[orderedControlReadIndex] = 0;
                 orderedControlNativeContexts[orderedControlReadIndex] = default;
+                orderedControlNintendoContexts[orderedControlReadIndex] = default;
+                orderedControlNintendoLastReceiptTimestamps[orderedControlReadIndex] = 0;
                 orderedControlReadIndex = (orderedControlReadIndex + 1) % orderedControlSlots.Length;
                 orderedControlCount--;
                 Interlocked.Increment(ref orderedControlDequeued);
@@ -645,6 +719,8 @@ namespace DS4Windows
                     Array.Clear(orderedControlEnqueueTimestamps, 0,
                         orderedControlEnqueueTimestamps.Length);
                     Array.Clear(orderedControlNativeContexts);
+                    Array.Clear(orderedControlNintendoContexts);
+                    Array.Clear(orderedControlNintendoLastReceiptTimestamps);
                     Array.Clear(orderedControlAdmissionRevisions);
                 }
                 orderedControlReadIndex = 0;
@@ -696,6 +772,8 @@ namespace DS4Windows
                 Array.Clear(orderedControlNativeCommands);
                 Array.Clear(orderedControlAdmissionRevisions);
                 Array.Clear(orderedControlNativeContexts);
+                Array.Clear(orderedControlNintendoContexts);
+                Array.Clear(orderedControlNintendoLastReceiptTimestamps);
                 orderedControlReadIndex = 0;
                 orderedControlWriteIndex = 0;
                 orderedControlCount = 0;
@@ -721,6 +799,7 @@ namespace DS4Windows
             Interlocked.Exchange(ref orderedControlDropped, 0);
             Interlocked.Exchange(ref orderedControlExpired, 0);
             Interlocked.Exchange(ref orderedControlRepeated, 0);
+            Interlocked.Exchange(ref orderedControlNintendoRepeated, 0);
             Interlocked.Exchange(ref orderedControlHighWater, 0);
             Interlocked.Exchange(ref orderedControlMaximumQueueAgeTicks, 0);
         }
@@ -751,8 +830,7 @@ namespace DS4Windows
             while (orderedControlCount > 0 &&
                 !orderedControlNativeCommands[orderedControlReadIndex] &&
                 orderedControlMaximumAgeTicks > 0 &&
-                nowTimestamp - orderedControlEnqueueTimestamps[
-                    orderedControlReadIndex] >
+                nowTimestamp - OrderedControlExpiryTimestamp(orderedControlReadIndex) >
                         orderedControlMaximumAgeTicks)
             {
                 RecordMaximum(ref orderedControlMaximumQueueAgeTicks,
@@ -763,6 +841,8 @@ namespace DS4Windows
                 orderedControlDeviceIndexes[orderedControlReadIndex] = -1;
                 orderedControlEnqueueTimestamps[
                     orderedControlReadIndex] = 0;
+                orderedControlNintendoContexts[orderedControlReadIndex] = default;
+                orderedControlNintendoLastReceiptTimestamps[orderedControlReadIndex] = 0;
                 orderedControlReadIndex = (orderedControlReadIndex + 1) %
                     orderedControlSlots.Length;
                 orderedControlCount--;

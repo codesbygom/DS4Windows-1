@@ -322,8 +322,9 @@ namespace DS4WinWPF.DS4Forms.ViewModels
             {
                 if (tempDev.ConnectionType == ConnectionType.BT)
                 {
-                    //tempDev.StopUpdate();
-                    tempDev.DisconnectBT();
+                    // Do not rely on a later read failure to remove the row:
+                    // the DualSense lifecycle has already retired by then.
+                    tempDev.DisconnectBT(callRemoval: true);
                 }
                 else if (tempDev.ConnectionType == ConnectionType.SONYWA)
                 {

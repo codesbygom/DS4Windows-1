@@ -764,6 +764,26 @@ namespace DS4Windows
                 }
             }
 
+            public static bool ReleaseSubscriber(string key,
+                ProcessCaptureSession captureSession, ProcessCaptureSubscriber subscriber)
+            {
+                // Match Acquire's registry -> subscriber order. The last-consumer
+                // decision and registry eviction must be atomic with a new Acquire.
+                lock (syncRoot)
+                {
+                    if (!captureSession.RemoveSubscriber(subscriber))
+                    {
+                        return false;
+                    }
+                    if (sessions.TryGetValue(key, out ProcessCaptureSession current) &&
+                        ReferenceEquals(current, captureSession))
+                    {
+                        sessions.Remove(key);
+                    }
+                    return true;
+                }
+            }
+
             private static string BuildKey(int processId,
                 WaveFormat waveFormat, string processedRouteEndpointId) =>
                 $"{processId}:{ProcessedAppAudioRouteRecovery.FormatIdentity(waveFormat)}:" +
@@ -827,6 +847,7 @@ namespace DS4Windows
             private byte[] scratch = Array.Empty<byte>();
             private int started;
             private int disposed;
+            private int retiring;
             private int loggedPollingRecovery;
             private int captureFailureSignaled;
             private long lastProcessedRouteCallbackTimestamp;
@@ -912,7 +933,8 @@ namespace DS4Windows
             }
 
             public int ProcessId { get; }
-            public bool IsDisposed => Volatile.Read(ref disposed) != 0;
+            public bool IsDisposed => Volatile.Read(ref disposed) != 0 ||
+                Volatile.Read(ref retiring) != 0;
 
             public ProcessCaptureLease Subscribe(
                 Action<byte[], int> dataAvailable,
@@ -963,16 +985,24 @@ namespace DS4Windows
                     return;
                 }
 
-                bool lastSubscriber;
+                if (ProcessCaptureRegistry.ReleaseSubscriber(registryKey, this, subscriber))
+                {
+                    // Stop/join native capture only after both ownership locks are released.
+                    Dispose();
+                }
+            }
+
+            public bool RemoveSubscriber(ProcessCaptureSubscriber subscriber)
+            {
                 lock (subscriberLock)
                 {
                     subscribers.Remove(subscriber);
-                    lastSubscriber = subscribers.Count == 0;
-                }
-                if (lastSubscriber)
-                {
-                    ProcessCaptureRegistry.Remove(registryKey, this);
-                    Dispose();
+                    if (subscribers.Count != 0)
+                    {
+                        return false;
+                    }
+                    Volatile.Write(ref retiring, 1);
+                    return true;
                 }
             }
 

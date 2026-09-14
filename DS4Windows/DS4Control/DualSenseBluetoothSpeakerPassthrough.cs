@@ -915,9 +915,8 @@ namespace DS4Windows
             if (useSystemDefault)
             {
                 sourceName = "Default audio endpoint";
-                return new LowLatencyWasapiLoopbackCapture(
-                    WasapiLoopbackCapture.GetDefaultLoopbackCaptureDevice(),
-                    LowLatencyCaptureBufferMs);
+                return CreateEndpointLoopbackCapture(
+                    WasapiLoopbackCapture.GetDefaultLoopbackCaptureDevice());
             }
 
             using var enumerator = new MMDeviceEnumerator();
@@ -965,7 +964,14 @@ namespace DS4Windows
             }
 
             sourceName = endpoint.FriendlyName;
-            return new LowLatencyWasapiLoopbackCapture(endpoint, LowLatencyCaptureBufferMs);
+            return CreateEndpointLoopbackCapture(endpoint);
+        }
+
+        private static IWaveIn CreateEndpointLoopbackCapture(MMDevice endpoint)
+        {
+            return ControllerEndpointLoopbackCaptureFactory.Create(endpoint,
+                source => new LowLatencyWasapiLoopbackCapture(source,
+                    LowLatencyCaptureBufferMs), "DualSense Bluetooth speaker");
         }
 
         private static bool IsLikelyGameAudioEndpoint(string sourceName)
@@ -1857,7 +1863,8 @@ namespace DS4Windows
 
         internal static bool ShouldBackpressurePacerProducer(
             bool helperActive, int pendingFrames,
-            bool usesV5Source, long presentedReports = 1)
+            bool usesV5Source, long presentedReports = 1,
+            int startupWarmupReportsRemaining = 0)
         {
             if (!helperActive)
             {
@@ -1874,7 +1881,10 @@ namespace DS4Windows
             // the bounded prime until every required report has crossed the
             // presentation boundary; only then apply the one-frame steady
             // latency reservoir.
-            if (presentedReports <
+            // Late acknowledgements from the previous source (or native
+            // control-only reports) can advance the lifetime counter after the
+            // new baseline. They cannot substitute for this source's warmup.
+            if (startupWarmupReportsRemaining > 0 || presentedReports <
                 DualSenseBluetoothAudioPacer.NativePrimeReportCount)
             {
                 target = DualSenseBluetoothAudioPacer.NativePrimeReportCount;
@@ -2148,6 +2158,15 @@ namespace DS4Windows
 
                         if (device.BluetoothAudioPacerActive)
                         {
+                            // The helper survives capture/profile changes, but
+                            // its presentation count belongs to all prior sources.
+                            // Establish this source's boundary before opening its
+                            // gate; otherwise a legacy source waits at one queued
+                            // report while the helper needs eight to prime. Do not
+                            // Clear here: reuse must preserve native game commands.
+                            Interlocked.Exchange(
+                                ref pacerPresentedReportsBaseline,
+                                device.BluetoothAudioPacerPresentedReports);
                             Volatile.Write(ref pacerPrewarmRequested, 0);
                             Volatile.Write(ref pacerRecoveryRequested, 0);
                             Volatile.Write(ref pacerLifecycleGateSource, 0);
@@ -2381,7 +2400,8 @@ namespace DS4Windows
                         CalculatePacerPresentedReportsSinceBaseline(
                             device.BluetoothAudioPacerPresentedReports,
                             Interlocked.Read(
-                                ref pacerPresentedReportsBaseline))))
+                                ref pacerPresentedReportsBaseline)),
+                        Volatile.Read(ref startupWarmupFramesRemaining)))
                     {
                         nextTick = Stopwatch.GetTimestamp();
                         captureFramesAvailable.WaitOne(1);

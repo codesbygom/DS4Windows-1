@@ -4,6 +4,57 @@ using System;
 
 namespace DS4Windows
 {
+    /// <summary>
+    /// Endpoint compatibility depends on the Windows audio driver, not the
+    /// physical controller. Keep each caller's established non-Sonar capture
+    /// constructor while sharing the proven Sonar polling implementation.
+    /// </summary>
+    internal static class ControllerEndpointLoopbackCaptureFactory
+    {
+        internal static IWaveIn Create(MMDevice endpoint,
+            Func<MMDevice, IWaveIn> standardFactory, string consumerName)
+        {
+            if (endpoint == null)
+                throw new ArgumentNullException(nameof(endpoint));
+            if (standardFactory == null)
+                throw new ArgumentNullException(nameof(standardFactory));
+
+            return Create(DualShock4EndpointCapturePolicy.SelectBackend(endpoint),
+                () => standardFactory(endpoint),
+                () =>
+                {
+                    var capture = new DualShock4SoftwareRouterLoopbackCapture(endpoint);
+                    try
+                    {
+                        AppLogger.LogToGui(
+                            $"{consumerName} selected the 4 ms requested-buffer polling WASAPI loopback backend for the SteelSeries Sonar route '{endpoint.FriendlyName}'.",
+                            false);
+                    }
+                    catch
+                    {
+                        // Diagnostics/property churn must not orphan the
+                        // capture client which now owns this endpoint.
+                    }
+                    return capture;
+                });
+        }
+
+        // Keep construction lazy: probing compatibility must never open a
+        // second capture client or start recording from an unselected route.
+        internal static IWaveIn Create(DualShock4EndpointCaptureBackend backend,
+            Func<IWaveIn> standardFactory, Func<IWaveIn> pollingFactory)
+        {
+            if (standardFactory == null)
+                throw new ArgumentNullException(nameof(standardFactory));
+            if (pollingFactory == null)
+                throw new ArgumentNullException(nameof(pollingFactory));
+
+            return backend == DualShock4EndpointCaptureBackend.SoftwareRouterPollingLoopback
+                ? pollingFactory()
+                : standardFactory();
+        }
+    }
+
     internal enum DualShock4EndpointCaptureBackend
     {
         StandardLoopback,

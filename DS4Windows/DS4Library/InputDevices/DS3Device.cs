@@ -32,6 +32,7 @@ namespace DS4Windows.InputDevices
         private bool outputDirty = false;
         private DS4HapticState previousHapticState = new DS4HapticState();
         private byte[] featureReport;
+        internal Func<byte[], bool> PhysicalOutputWriteTestHook;
 
         public override event ReportHandler<EventArgs> Report = null;
         public override event EventHandler BatteryChanged;
@@ -406,16 +407,7 @@ namespace DS4Windows.InputDevices
                         Report?.Invoke(this, EventArgs.Empty);
                     }
 
-                    PrepareOutReport();
-                    if (outputDirty)
-                    {
-                        WriteReport();
-                        currentHap.dirty = false;
-                        previousHapticState = currentHap;
-                    }
-
-                    outputDirty = false;
-                    currentHap.dirty = false;
+                    ProcessPendingOutputReport();
                     //forceWrite = false;
 
                     if (!string.IsNullOrEmpty(currerror))
@@ -660,8 +652,32 @@ namespace DS4Windows.InputDevices
 
         }
 
+        internal bool ProcessPendingOutputReport()
+        {
+            PrepareOutReport();
+            if (outputDirty)
+            {
+                // A failed write did not apply the prepared state. Keep it
+                // dirty for the next input/output pass, including a final
+                // neutral when no further game feedback will arrive. This
+                // remains a latest-state compositor: a newer stop can still
+                // supersede an unaccepted active state before the retry.
+                if (!WriteReport())
+                    return false;
+
+                currentHap.dirty = false;
+                previousHapticState = currentHap;
+            }
+            outputDirty = false;
+            currentHap.dirty = false;
+            return true;
+        }
+
         private bool WriteReport(int timeoutMilliseconds = READ_STREAM_TIMEOUT)
         {
+            if (PhysicalOutputWriteTestHook != null)
+                return PhysicalOutputWriteTestHook(outputReport);
+
             var result = hDevice.WriteOutputReportViaInterrupt(outputReport,
                 timeoutMilliseconds);
 

@@ -269,14 +269,22 @@ public sealed class DualShock4ProfileOutputStopTests
     [DataRow(0)]
     [DataRow(2)]
     [DataRow(5)]
+    [DoNotParallelize]
     public void WarmPolicyTransitionsAndWriterCompositionAllocateNothing(int transport)
     {
         var device = new RecordingDevice(transport) { CaptureReports = false };
         for (int i = 0; i < 2000; i++) Step();
-        long before = GC.GetAllocatedBytesForCurrentThread();
-        for (int i = 0; i < 20000; i++) Step();
-        long after = GC.GetAllocatedBytesForCurrentThread();
-        Assert.AreEqual(0L, after - before);
+        long allocated;
+        // GC allocation-context repair can advance the counter without an
+        // object allocation. Isolate only this warmed synchronous measurement;
+        // scope failure still fails and the allocation limit stays exactly zero.
+        using (StrictAllocationMeasurementScope.Begin())
+        {
+            long before = GC.GetAllocatedBytesForCurrentThread();
+            for (int i = 0; i < 20000; i++) Step();
+            allocated = GC.GetAllocatedBytesForCurrentThread() - before;
+        }
+        Assert.AreEqual(0L, allocated);
 
         void Step()
         {
@@ -287,6 +295,43 @@ public sealed class DualShock4ProfileOutputStopTests
             device.Pump();
             device.Pump();
         }
+    }
+
+    [DataTestMethod]
+    [DataRow(0)]
+    [DataRow(2)]
+    [DataRow(5)]
+    [DoNotParallelize]
+    public void RealWriterReportCloneStillFailsTheExactZeroAllocationGate(int transport)
+    {
+        var device = new RecordingDevice(transport) { CaptureReports = false };
+        for (int i = 0; i < 2000; i++)
+        {
+            device.setRumble((byte)i, (byte)(i + 1));
+            device.Pump();
+        }
+
+        // Warm the same writer's real recording clone and list capacity before
+        // measuring one changed report. The clone itself stays inside the gate.
+        device.CaptureReports = true;
+        device.setRumble(100, 200);
+        device.Pump();
+        Assert.AreEqual(1, device.Reports.Count);
+        device.Reports.Clear();
+        device.setRumble(101, 201);
+        long allocated;
+        using (StrictAllocationMeasurementScope.Begin())
+        {
+            long before = GC.GetAllocatedBytesForCurrentThread();
+            device.Pump();
+            allocated = GC.GetAllocatedBytesForCurrentThread() - before;
+        }
+
+        Assert.AreEqual(1, device.Reports.Count);
+        Assert.IsTrue(allocated >= device.Reports[0].Length,
+            "The actual writer's managed report clone must remain visible.");
+        Assert.ThrowsException<AssertFailedException>(() => Assert.AreEqual(0L, allocated));
+        GC.KeepAlive(device.Reports);
     }
 
     private sealed class RuntimeInputOnly()

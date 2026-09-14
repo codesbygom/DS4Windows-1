@@ -1,9 +1,34 @@
 {
-  "latest_version": "5.0.5.9",
-  "latest_version_number_info": {"majorPart": 5, "minorPart": 0, "buildPart": 5},
-  "updated_at": "2026-09-12T16:10:00+0000",
+  "latest_version": "5.0.6.0",
+  "latest_version_number_info": {"majorPart": 5, "minorPart": 0, "buildPart": 6},
+  "updated_at": "2026-09-14T14:32:00+0000",
   "changelog": {
     "versions": [
+    {
+      "version_str": "5.0.6.0",
+      "version_number_info": {"majorPart": 5, "minorPart": 0, "buildPart": 6},
+      "base_header": "Release Candidate 4.6 Hotfix — Clearer Audio, Reliable Feedback & Disconnects",
+      "release_date": "2026-09-14T14:32:00+0000",
+      "locales": [
+        {
+          "code": "en",
+          "header": "Release Candidate 4.6 Hotfix — Clearer Audio, Reliable Feedback & Disconnects",
+          "log_text": [
+            "* **Controller audio recovery** - fix reused DualSense speaker warmup and Sonar capture compatibility over USB and Bluetooth",
+            "* **Higher-quality audio routing** - keep app/external DualSense capture at 48 kHz float, preserve the virtual DS4 headset at 32 kHz, and correctly convert USB source rates without truncating large callbacks",
+            "* **Safe source replacement** - reject retired callbacks and clear old audio; avoid capture-shutdown and shared-process retirement races",
+            "* **Feedback across controllers** - fresh DS4 motor changes and stops bypass audio maintenance pacing, DS3 retries failed writes, and Switch 2 conservatively shares eligible pending repeats without retuning rumble",
+            "* **VIIPER feedback safety** - reserve a virtual DS4 stop slot for V3 speaker framing, reject full distinct queues truthfully, and preserve feedback ownership across reader reconnects",
+            "* **Bluetooth disconnect cleanup** - remove controller-list and tray-disconnected devices without relying on a later HID failure",
+            "* **Game Bar profile safeguard** - reject delayed compatibility activation when the current profile no longer allows it",
+            "* **Complete matching packages** - DS4Windows 5.0.6.0 includes VIIPER 0.1.5-rc4.6 and Xbox output identity; DS4Updater 2.0.6 remains compatible"
+          ],
+          "editor": "hbashton",
+          "editors_note": ["Unsigned release candidate. Rebuilt local x64 validation passed 5,717 tests with zero failures, including eight isolated DS4Windows-to-VIIPER process tests; three live-audio cases remain gated. Allocation assertions remain strict. Final hardware listening and gameplay acceptance remain outstanding. The rare movement interruption remains unattributed, and the Game Bar safeguard is not proof that incident is solved. No Nintendo rumble gain/cadence retuning or claim of unlimited actuator throughput."],
+          "updated_at": "2026-09-14T14:32:00+0000"
+        }
+      ]
+    },
     {
       "version_str": "5.0.5.9",
       "version_number_info": {"majorPart": 5, "minorPart": 0, "buildPart": 5},

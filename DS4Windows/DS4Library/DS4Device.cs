@@ -450,13 +450,27 @@ namespace DS4Windows
         internal static bool ShouldDeferBluetoothEffectDuringSpeaker(
             bool usingBluetooth, bool speakerEnabled, bool force,
             bool reportPending, long elapsedMilliseconds,
-            bool audioControlRefreshPending = false)
+            bool audioControlRefreshPending = false,
+            bool rumbleStateChanged = false)
         {
             return usingBluetooth && speakerEnabled && !force &&
                 !audioControlRefreshPending &&
+                !rumbleStateChanged &&
                 reportPending && elapsedMilliseconds >= 0 &&
                 elapsedMilliseconds <
                     BLUETOOTH_EFFECT_INTERVAL_DURING_SPEAKER_MS;
+        }
+
+        internal static bool HasChangedDualShock4RumbleState(
+            ReadOnlySpan<byte> preparedReport, ReadOnlySpan<byte> admittedReport,
+            int motorOffset)
+        {
+            if (motorOffset < 0 || motorOffset > preparedReport.Length - 2 ||
+                motorOffset > admittedReport.Length - 2)
+                return false;
+
+            return preparedReport[motorOffset] != admittedReport[motorOffset] ||
+                preparedReport[motorOffset + 1] != admittedReport[motorOffset + 1];
         }
 
         internal void SetBluetoothAudioDefaultInputIntervalOverride(
@@ -2636,9 +2650,18 @@ namespace DS4Windows
                 long elapsedMilliseconds = lastEffectTick == 0 ?
                     long.MaxValue : Math.Max(0,
                         Environment.TickCount64 - lastEffectTick);
+                int motorOffset =
+                    (featureSet & VidPidFeatureSet.OnlyOutputData0x05) == 0 ? 6 : 4;
+                // Fresh motor changes (including zero) must reach the existing
+                // audio owner's mailbox without waiting for LED maintenance.
+                // Compare bytes owned by the last accepted publication, not
+                // command generations: repeats also create new generations.
+                // Rejected audio admission below never advances outputReport.
+                bool rumbleStateChanged = HasChangedDualShock4RumbleState(
+                    outReportBuffer, outputReport, motorOffset);
                 if (ShouldDeferBluetoothEffectDuringSpeaker(usingBT,
                     bluetoothAudio.SpeakerEnabled, force, haptime,
-                    elapsedMilliseconds))
+                    elapsedMilliseconds, rumbleStateChanged: rumbleStateChanged))
                 {
                     // outReportBuffer retains the newest merged state. Because
                     // outputReport still contains the last transmitted state,

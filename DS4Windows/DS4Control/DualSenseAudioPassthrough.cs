@@ -648,7 +648,12 @@ namespace DS4Windows
                 return;
             }
 
-            capture = sourceEndpoint != null ? new WasapiLoopbackCapture(sourceEndpoint) : new WasapiLoopbackCapture();
+            // Resolve the default endpoint too: it can be a Sonar software
+            // route and needs the same capture policy as an explicit choice.
+            sourceEndpoint ??= WasapiLoopbackCapture.GetDefaultLoopbackCaptureDevice();
+            capture = ControllerEndpointLoopbackCaptureFactory.Create(
+                sourceEndpoint, endpoint => new WasapiLoopbackCapture(endpoint),
+                "DualSense USB speaker");
             captureEndpointId = requestedCaptureEndpointId;
             captureEndpointKind = endpointKind;
             captureFormat = capture.WaveFormat;
@@ -667,6 +672,10 @@ namespace DS4Windows
             captureFormat = null;
             captureEndpointId = string.Empty;
             captureEndpointKind = ControllerAudioEndpointKind.Any;
+            foreach (SlotPlayback slot in slots)
+            {
+                slot?.ResetCaptureSource();
+            }
 
             if (oldCapture == null)
             {
@@ -676,13 +685,36 @@ namespace DS4Windows
             oldCapture.DataAvailable -= Capture_DataAvailable;
             oldCapture.RecordingStopped -= Capture_RecordingStopped;
 
-            try
+            // WASAPI disposal joins its capture thread. Retire outside the manager
+            // lock so a callback already waiting for that lock can observe its
+            // revoked identity and return instead of deadlocking the join.
+            _ = Task.Run(() =>
             {
-                oldCapture.StopRecording();
-            }
-            catch { }
-
-            oldCapture.Dispose();
+                try
+                {
+                    oldCapture.StopRecording();
+                }
+                catch (Exception ex)
+                {
+                    try
+                    {
+                        AppLogger.LogToGui($"DualSense audio capture cleanup could not stop its retired source: {ex.Message}", true);
+                    }
+                    catch { } // A retiring UI logger must not prevent resource disposal.
+                }
+                try
+                {
+                    oldCapture.Dispose();
+                }
+                catch (Exception ex)
+                {
+                    try
+                    {
+                        AppLogger.LogToGui($"DualSense audio capture cleanup could not dispose its retired source: {ex.Message}", true);
+                    }
+                    catch { } // Do not leave an unobserved retirement task on UI shutdown.
+                }
+            });
         }
 
         private void Capture_RecordingStopped(object sender, StoppedEventArgs e)
@@ -697,7 +729,8 @@ namespace DS4Windows
         {
             lock (syncRoot)
             {
-                if (captureFormat == null || captureFormat.Channels < 1)
+                if (!ReferenceEquals(sender, capture) ||
+                    captureFormat == null || captureFormat.Channels < 1)
                 {
                     return;
                 }
@@ -1423,10 +1456,18 @@ namespace DS4Windows
 
         private sealed class SlotPlayback : IDisposable
         {
+            private const int ProcessingBlockFrames = 256;
             private readonly WasapiOut output;
             private readonly BufferedWaveProvider provider;
             private readonly WaveFormat outputFormat;
             private readonly byte[] outputBuffer;
+            private NAudio.Dsp.WdlResampler resampler;
+            private float[] convertedSamples;
+            private int sourceSampleRate;
+            private long sourceFramesReceived;
+            private long outputFramesProduced;
+            private WaveFormat lastCaptureFormat;
+            private WaveFormat sampleCaptureFormat;
 
             public string EndpointId { get; }
             public byte SpeakerVolume { get; set; }
@@ -1437,32 +1478,148 @@ namespace DS4Windows
                 EndpointId = endpointId;
                 this.output = output;
                 this.provider = provider;
-                this.outputFormat = outputFormat;
+                // Interpret the samples without changing the endpoint's negotiated format.
+                this.outputFormat = outputFormat is WaveFormatExtensible extensible ?
+                    extensible.AsStandardWaveFormat() : outputFormat;
                 SpeakerVolume = speakerVolume;
                 outputBuffer = new byte[4096 * outputFormat.BlockAlign];
             }
 
             public void WriteFromCapture(byte[] captureBuffer, int frames, WaveFormat captureFormat)
             {
-                int framesToWrite = Math.Min(frames, outputBuffer.Length / outputFormat.BlockAlign);
-                float volume = SpeakerVolume / 255.0f;
-                Array.Clear(outputBuffer, 0, framesToWrite * outputFormat.BlockAlign);
-
-                for (int frame = 0; frame < framesToWrite; frame++)
+                ArgumentNullException.ThrowIfNull(captureBuffer);
+                ArgumentNullException.ThrowIfNull(captureFormat);
+                if (frames < 0 || captureFormat.BlockAlign <= 0 ||
+                    frames > captureBuffer.Length / captureFormat.BlockAlign)
                 {
-                    int captureOffset = frame * captureFormat.BlockAlign;
-                    float left = ReadSample(captureBuffer, captureOffset, captureFormat);
-                    float right = captureFormat.Channels > 1 ?
-                        ReadSample(captureBuffer, captureOffset + BytesPerSample(captureFormat), captureFormat) : left;
-                    float mono = Math.Clamp((left + right) * 0.5f * volume, -1.0f, 1.0f);
-
-                    int outputOffset = frame * outputFormat.BlockAlign;
-                    int speakerChannel = outputFormat.Channels >= 4 ? 1 : 0;
-                    WriteSample(outputBuffer, outputOffset + speakerChannel * BytesPerSample(outputFormat),
-                        outputFormat, mono);
+                    throw new ArgumentOutOfRangeException(nameof(frames));
+                }
+                if (frames == 0)
+                {
+                    return;
                 }
 
-                provider.AddSamples(outputBuffer, 0, framesToWrite * outputFormat.BlockAlign);
+                if (!ReferenceEquals(lastCaptureFormat, captureFormat))
+                {
+                    sampleCaptureFormat = captureFormat is WaveFormatExtensible extensible ?
+                        extensible.AsStandardWaveFormat() : captureFormat;
+                    lastCaptureFormat = captureFormat;
+                }
+                EnsureSourceRate(captureFormat.SampleRate);
+                float volume = SpeakerVolume / 255.0f;
+                int sourceFrame = 0;
+                while (sourceFrame < frames)
+                {
+                    int blockFrames = Math.Min(frames - sourceFrame, ProcessingBlockFrames);
+                    if (resampler == null)
+                    {
+                        // Native-rate audio needs neither filtering nor an extra waiting block.
+                        for (int frame = 0; frame < blockFrames; frame++)
+                        {
+                            convertedSamples[frame] = ReadSpeakerSample(captureBuffer,
+                                (sourceFrame + frame) * captureFormat.BlockAlign, sampleCaptureFormat);
+                        }
+                        WriteConvertedSamples(blockFrames, volume);
+                    }
+                    else
+                    {
+                        // Feed exactly the samples available now. Requesting a full block and
+                        // supplying fewer samples would tell WDL to flush/pad the stream.
+                        int requested = resampler.ResamplePrepare(blockFrames, 1,
+                            out float[] input, out int inputOffset);
+                        if (requested != blockFrames)
+                        {
+                            throw new InvalidOperationException("The speaker resampler rejected its input block.");
+                        }
+                        for (int frame = 0; frame < blockFrames; frame++)
+                        {
+                            input[inputOffset + frame] = ReadSpeakerSample(captureBuffer,
+                                (sourceFrame + frame) * captureFormat.BlockAlign, sampleCaptureFormat);
+                        }
+
+                        sourceFramesReceived += blockFrames;
+                        long dueFrames = sourceFramesReceived / sourceSampleRate * outputFormat.SampleRate +
+                            sourceFramesReceived % sourceSampleRate * outputFormat.SampleRate / sourceSampleRate;
+                        int outputCapacity = (int)Math.Min(convertedSamples.Length,
+                            Math.Max(0, dueFrames - outputFramesProduced));
+                        // Bound consumption to received source time, including for downsampling
+                        // ratios above two. Keep WDL's fractional phase across callback boundaries.
+                        // Its IIR output filter requires an output offset of zero (NAudio 2.2.1).
+                        int produced = resampler.ResampleOut(convertedSamples, 0,
+                            blockFrames, outputCapacity, 1);
+                        outputFramesProduced += produced;
+                        WriteConvertedSamples(produced, volume);
+                    }
+                    sourceFrame += blockFrames;
+                }
+            }
+
+            private void EnsureSourceRate(int sampleRate)
+            {
+                if (sampleRate <= 0)
+                {
+                    throw new ArgumentOutOfRangeException(nameof(sampleRate));
+                }
+                if (sourceSampleRate == sampleRate)
+                {
+                    return;
+                }
+                sourceSampleRate = sampleRate;
+                sourceFramesReceived = 0;
+                outputFramesProduced = 0;
+                if (sampleRate == outputFormat.SampleRate)
+                {
+                    resampler = null;
+                    convertedSamples = new float[ProcessingBlockFrames];
+                    return;
+                }
+
+                resampler = new NAudio.Dsp.WdlResampler();
+                resampler.SetMode(true, 2, false);
+                resampler.SetFeedMode(true);
+                resampler.SetRates(sampleRate, outputFormat.SampleRate);
+                convertedSamples = new float[checked((int)Math.Ceiling(
+                    (ProcessingBlockFrames + 2.0) * outputFormat.SampleRate / sampleRate + 2.0))];
+            }
+
+            public void ResetCaptureSource()
+            {
+                resampler = null;
+                convertedSamples = null;
+                sourceSampleRate = 0;
+                sourceFramesReceived = 0;
+                outputFramesProduced = 0;
+                lastCaptureFormat = null;
+                sampleCaptureFormat = null;
+                provider.ClearBuffer();
+            }
+
+            private static float ReadSpeakerSample(byte[] buffer, int offset, WaveFormat format)
+            {
+                float left = ReadSample(buffer, offset, format);
+                float right = format.Channels > 1 ?
+                    ReadSample(buffer, offset + BytesPerSample(format), format) : left;
+                return (left + right) * 0.5f;
+            }
+
+            private void WriteConvertedSamples(int frames, float volume)
+            {
+                int frameOffset = 0;
+                int speakerOffset = (outputFormat.Channels >= 4 ? 1 : 0) * BytesPerSample(outputFormat);
+                while (frameOffset < frames)
+                {
+                    int blockFrames = Math.Min(frames - frameOffset,
+                        outputBuffer.Length / outputFormat.BlockAlign);
+                    int bytes = blockFrames * outputFormat.BlockAlign;
+                    Array.Clear(outputBuffer, 0, bytes);
+                    for (int frame = 0; frame < blockFrames; frame++)
+                    {
+                        WriteSample(outputBuffer, frame * outputFormat.BlockAlign + speakerOffset,
+                            outputFormat, convertedSamples[frameOffset + frame] * volume);
+                    }
+                    provider.AddSamples(outputBuffer, 0, bytes);
+                    frameOffset += blockFrames;
+                }
             }
 
             private static int BytesPerSample(WaveFormat format)
@@ -1525,12 +1682,14 @@ namespace DS4Windows
                 value = Math.Clamp(value, -1.0f, 1.0f);
                 if (format.Encoding == WaveFormatEncoding.IeeeFloat && format.BitsPerSample == 32)
                 {
-                    Buffer.BlockCopy(BitConverter.GetBytes(value), 0, buffer, offset, sizeof(float));
+                    System.Buffers.Binary.BinaryPrimitives.WriteInt32LittleEndian(
+                        buffer.AsSpan(offset, sizeof(float)), BitConverter.SingleToInt32Bits(value));
                 }
                 else if (format.Encoding == WaveFormatEncoding.Pcm && format.BitsPerSample == 16)
                 {
                     short sample = (short)Math.Clamp(value * short.MaxValue, (float)short.MinValue, short.MaxValue);
-                    Buffer.BlockCopy(BitConverter.GetBytes(sample), 0, buffer, offset, sizeof(short));
+                    System.Buffers.Binary.BinaryPrimitives.WriteInt16LittleEndian(
+                        buffer.AsSpan(offset, sizeof(short)), sample);
                 }
                 else if (format.Encoding == WaveFormatEncoding.Pcm && format.BitsPerSample == 24)
                 {
@@ -1542,7 +1701,8 @@ namespace DS4Windows
                 else if (format.Encoding == WaveFormatEncoding.Pcm && format.BitsPerSample == 32)
                 {
                     int sample = (int)Math.Clamp(value * int.MaxValue, (float)int.MinValue, int.MaxValue);
-                    Buffer.BlockCopy(BitConverter.GetBytes(sample), 0, buffer, offset, sizeof(int));
+                    System.Buffers.Binary.BinaryPrimitives.WriteInt32LittleEndian(
+                        buffer.AsSpan(offset, sizeof(int)), sample);
                 }
             }
 

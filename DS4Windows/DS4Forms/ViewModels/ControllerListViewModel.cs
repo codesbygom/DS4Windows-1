@@ -995,10 +995,11 @@ namespace DS4WinWPF.DS4Forms.ViewModels
             {
                 if (device.ConnectionType == ConnectionType.BT)
                 {
-                    //device.StopUpdate();
                     device.queueEvent(() =>
                     {
-                        device.DisconnectBT();
+                        // Manual disconnect owns removal. DualSense retires its
+                        // lifecycle before the radio's later HID read failure.
+                        device.DisconnectBT(callRemoval: true);
                     });
                 }
                 else if (device.ConnectionType == ConnectionType.SONYWA)
