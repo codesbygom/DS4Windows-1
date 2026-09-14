@@ -41,7 +41,7 @@ Windows can still deny permissions or require manual repair. Automated recovery 
 - Tag: **VIIPERRC4.6.2**. Windows application/MSI/installer version: **5.0.8.0**, advanced for correct upgrade ordering.
 - Complete offline x64 installer and portable ZIP, including unchanged **VIIPER 0.1.5-rc4.6**, **USB/IP 0.9.7.7**, the required Xbox output identity, matching sources and notices. No separate broker upgrade is needed.
 - Companion updater: **DS4Updater 2.0.7**. Earlier release assets remain unchanged.
-- The integrated pre-release source passed **6,362 tests with zero failures**, with 11 explicitly gated skips. The warmed native-shadow check measures **zero allocations**; the allocation assertion was not relaxed.
+- The release candidate passed **6,367 tests with zero failures**, with 11 explicitly gated skips. The warmed native-shadow check measures **zero allocations**; the allocation assertion was not relaxed.
 - This is an **unsigned release candidate**. Automated tests, hosted MSI lifecycle checks and package verification do not replace physical controller/game-mod acceptance. Nintendo rumble gain/cadence and PCM audio encoding are not retuned in this release.
 
 Technical evidence: [PR review](https://github.com/hbashton/DS4Windows/blob/VIIPERRC4.6.2/docs/validation/2026-09-14-pull-request-review.md) and [startup, updater and profile fixes](https://github.com/hbashton/DS4Windows/blob/VIIPERRC4.6.2/docs/validation/2026-09-14-issues-99-77-46.md).

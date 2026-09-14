@@ -64,9 +64,16 @@ public sealed class PortableUpdaterBootstrapTests
     [DataRow("other.exe:stream")]
     public void LaunchArgumentsRejectForeignExecutablesBeforeAnyProcessStart(string executable)
     {
-        var ticket = new PortableUpdaterTicket("unused", "unused", new(2, 0, 5, 0), new string('a', 64), 1);
+        using var fixture = new DownloadFixture();
+        var ticket = new PortableUpdaterTicket(fixture.Root, fixture.Updater,
+            PortableUpdaterBootstrap.MinimumVersion, new string('a', 64), 1);
+        // A valid name must pass all other preconditions, so rejection below
+        // proves the path guard rather than an obsolete version/root fixture.
+        var valid = PortableUpdaterBootstrap.CreateStartInfo(ticket,
+            "VIIPERRC4.6.2", "DS4Windows.exe", 123, 456);
+        Assert.AreEqual(fixture.Updater, valid.FileName);
         Assert.ThrowsException<ArgumentException>(() => PortableUpdaterBootstrap.CreateStartInfo(ticket,
-            "VIIPERRC4.5.1", executable, 123, 456));
+            "VIIPERRC4.6.2", executable, 123, 456));
     }
 
     [TestMethod]

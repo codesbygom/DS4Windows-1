@@ -18,9 +18,9 @@ Installed startup tasks continue to target the verified installed broker.
 ```powershell
 .\installer\build-installer.ps1 `
   -PublishRoot .\bin\x64\Release\output `
-  -ProductVersion 5.0.7.0 `
-  -BundleVersion 5.0.7.0 `
-  -DisplayVersion VIIPERRC4.6.1 `
+  -ProductVersion 5.0.8.0 `
+  -BundleVersion 5.0.8.0 `
+  -DisplayVersion VIIPERRC4.6.2 `
   -SkipApplicationPublish
 ```
 
