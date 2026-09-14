@@ -1,12 +1,13 @@
 # Calibrate flick stick with a 360° turn
 
-Bind a button to **360° turn — right stick calibration** (or the left-stick
-equivalent) in the button remapper's **Flick-stick calibration** tab. Regular
-and shifted bindings use the same actions, on every supported physical
-controller and virtual controller type. The game must accept mouse look.
+Open **Axis Config → LS or RS**, set **Output Mode → Flick Stick**, and choose
+a **360° test button** beside that stick's existing calibration settings.
+This works with every supported physical controller and virtual controller
+type; the selected button must exist on the physical controller, and the game
+must accept mouse look. It is not a button-remapping or Special Actions item.
 
-1. Set an initial **Real World Calibration** value under **Axis Config → the
-   selected stick → Flick Stick**, then save the profile.
+1. Set an initial **Real World Calibration** value for that stick, choose a
+   spare test button, then save the profile.
 2. In the game, face an easy-to-recognize landmark. Keep other aiming inputs
    still and tap the bound button. It performs one test turn over about a second.
 3. If the turn falls short of the landmark, increase Real World Calibration.
@@ -28,11 +29,26 @@ queued; release and tap again after it finishes. A profile change, disconnected
 controller, output-handler replacement or report gap longer than 250 ms cancels
 unfinished motion. A held button cannot restart it after that boundary.
 Pausing the mapper, including recording a macro, cancels the turn too.
+Changing the test button or leaving Flick Stick mode cancels unfinished motion.
+If both sticks use the same test button, the right stick's RWC wins: one turn,
+not two.
+
+The test button's normal game/key/macro mapping is reserved while that stick
+uses Flick Stick. A trigger assignment reserves both its soft and full-pull
+outputs. Choose **Not assigned** when finished to restore the normal binding;
+the stored binding is never erased. Independent physical-button features such
+as Game Bar, mute shortcuts and gyro activation remain unchanged, so use a spare
+button for a clean measurement. Touch observations remain intact as well.
 
 ## Implementation notes
 
-- New actions append output IDs 45 and 46; existing profile IDs do not change.
-- The normal mapper selects the action and consumes the original game button.
+- Each stick persists its source button as a canonical `CalibrationTrigger`
+  name inside `FlickStickSettings`. Missing/unknown fields leave it unassigned.
+  Experimental saved output actions 45/46 remain readable and executable for
+  compatibility, but are no longer offered by the button-remapping UI.
+- The normal mapper reads both test buttons before consuming their source
+  fields and initial default outputs. Other bindings into the same destination
+  remain intact, as do the physical snapshots.
   Its per-controller one-shot state emits cumulative integer targets at the
   controller report cadence, preserving the rounded total across report rates.
 - There is no worker, sleep, macro queue, haptics change or virtual-pad change.

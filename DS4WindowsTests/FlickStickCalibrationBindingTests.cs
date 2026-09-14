@@ -120,17 +120,18 @@ public class FlickStickCalibrationBindingTests
     [DataRow(X360Controls.FlickStickCalibrate360RS, false)]
     [DataRow(X360Controls.FlickStickCalibrate360LS, true)]
     [DataRow(X360Controls.FlickStickCalibrate360RS, true)]
-    public void SharedBindingEditorCommitsEitherStickWithoutKeyboardToggleFlags(
+    public void SavedCalibrationBindingsRemainEditableWithoutKeyboardToggleFlags(
         X360Controls action, bool shift)
     {
         var setting = new DS4ControlSettings(DS4Controls.Cross);
         setting.UpdateSettings(false, X360Controls.B, string.Empty, DS4KeyType.None);
+        setting.UpdateSettings(shift, action, string.Empty, DS4KeyType.None,
+            trigger: shift ? 1 : 0);
         var editor = new BindingWindowViewModel(Global.TEST_PROFILE_INDEX, setting);
         OutBinding selected = shift ? editor.ShiftOutBind : editor.CurrentOutBind;
         editor.ActionBinding = selected;
-        selected.outputType = OutBinding.OutType.Button;
-        selected.control = action;
-        selected.ShiftTrigger = 1;
+        Assert.AreEqual(OutBinding.OutType.Button, selected.outputType);
+        Assert.AreEqual(action, selected.control);
         selected.Toggle = true;
         selected.HasScanCode = true;
         editor.WriteBinds();
@@ -146,31 +147,25 @@ public class FlickStickCalibrationBindingTests
     }
 
     [TestMethod]
-    public void BindingChoicesExplainHowToTestAndAdjustTheSelectedStick()
+    public void BindingEditorDoesNotOfferFlickStickCalibrationActions()
     {
         XNamespace xaml = "http://schemas.microsoft.com/winfx/2006/xaml";
         var document = XDocument.Load(BindingWindowPath());
-        XElement tab = document.Descendants().Single(element =>
-            (string)element.Attribute(xaml + "Name") == "flickStickCalibrationTab");
-        Assert.AreEqual("Flick-stick calibration", (string)tab.Attribute("Header"));
-        Assert.IsNull(tab.Attribute("Visibility"), "The shared binding choices must be available by default.");
-        foreach ((string name, X360Controls action) in new[]
+        foreach (string name in new[]
         {
-            ("flickStickCalibrate360LSBtn", X360Controls.FlickStickCalibrate360LS),
-            ("flickStickCalibrate360RSBtn", X360Controls.FlickStickCalibrate360RS),
+            "flickStickCalibrationTab",
+            "flickStickCalibrate360LSBtn",
+            "flickStickCalibrate360RSBtn",
         })
         {
-            XElement button = tab.Descendants().Single(element =>
-                (string)element.Attribute(xaml + "Name") == name);
-            Assert.AreEqual(Global.getX360ControlString(action), (string)button.Attribute("Content"));
+            Assert.IsFalse(document.Descendants().Any(element =>
+                (string)element.Attribute(xaml + "Name") == name),
+                "Flick-stick calibration belongs in Axis Config, outside the button remapper.");
         }
-        string instructions = string.Join(" ", tab.Descendants()
-            .Select(element => (string)element.Attribute("Text")));
-        StringAssert.Contains(instructions, "mouse look");
-        StringAssert.Contains(instructions, "about one second");
-        StringAssert.Contains(instructions, "selected stick's Real World Calibration");
-        StringAssert.Contains(instructions, "increase Real World Calibration if the turn undershoots");
-        StringAssert.Contains(instructions, "decrease it if the turn overshoots");
+        string code = File.ReadAllText(BindingWindowPath() + ".cs");
+        Assert.IsFalse(code.Contains("FlickStickCalibrate360", StringComparison.Ordinal),
+            "Saved calibration output IDs must not register new remapping choices.");
+        StringAssert.Contains(code, "mouseBtnMap.TryGetValue(binding.control, out Button tempBtn)");
     }
 
     private static X360Controls CalibrationAction(int index) => (index & 1) == 0

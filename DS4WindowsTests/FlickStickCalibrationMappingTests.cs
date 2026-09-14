@@ -83,6 +83,168 @@ public class FlickStickCalibrationMappingTests
         Assert.IsTrue(handler.Moves.All(move => move.X is >= 0 and <= 32767));
     }
 
+    [DataTestMethod]
+    [DataRow(false)]
+    [DataRow(true)]
+    public void AxisConfiguredButtonUsesItsStickCalibrationAndConsumesOnlyItsNormalOutput(bool right)
+    {
+        ConfigureAxis(right, DS4Controls.Cross, right ? 5.3 : 2.0);
+        Frame(0, false);
+        Assert.IsFalse(Frame(.004, true, true).Cross);
+        for (int frame = 2; frame <= 400; frame++)
+        {
+            var mapped = Frame(frame * .004, true, true);
+            Assert.IsFalse(mapped.Cross);
+            Assert.IsTrue(mapped.Triangle, "Other game buttons remain live during the turn.");
+        }
+        Assert.AreEqual(right ? 1908 : 720, handler.Moves.Sum(move => move.X));
+        Assert.IsTrue(handler.Moves.All(move => move.Y == 0));
+    }
+
+    [TestMethod]
+    public void AxisFlickModeAdmitsMapperWithoutAnyButtonRemapsOrSpecialActions()
+    {
+        Global.store.profileActions[Slot].Clear();
+        Global.store.profileActionCount[Slot] = 0;
+        ConfigureAxis(true, DS4Controls.Cross);
+        Assert.IsFalse(Global.store.HasCustomActions(Slot));
+        Global.store.CacheProfileCustomsFlags(Slot);
+        Assert.IsTrue(Global.containsCustomAction(Slot));
+    }
+
+    [TestMethod]
+    public void SharedAxisButtonRequestsOneRightStickTurn()
+    {
+        ConfigureAxis(false, DS4Controls.Cross, 2.0);
+        ConfigureAxis(true, DS4Controls.Cross, 5.3);
+        Frame(0, false);
+        Frame(.004, true);
+        for (int frame = 2; frame <= 260; frame++) Frame(frame * .004, false);
+        Assert.AreEqual(1908, handler.Moves.Sum(move => move.X));
+    }
+
+    [DataTestMethod]
+    [DataRow(StickMode.Controls)]
+    [DataRow(StickMode.None)]
+    public void InactiveAxisModeDoesNotConsumeOrTurn(StickMode mode)
+    {
+        ConfigureAxis(true, DS4Controls.Cross);
+        Global.RSOutputSettings[Slot].mode = mode;
+        Frame(0, false);
+        for (int frame = 1; frame <= 260; frame++)
+            Assert.IsTrue(Frame(frame * .004, true).Cross);
+        Assert.AreEqual(0, handler.Moves.Count);
+    }
+
+    [DataTestMethod]
+    [DataRow(DS4Controls.None)]
+    [DataRow(DS4Controls.GyroXNeg)]
+    [DataRow(DS4Controls.SwipeRight)]
+    [DataRow(DS4Controls.LXNeg)]
+    [DataRow((DS4Controls)255)]
+    public void UnassignedOrUnsupportedAxisSourceIsSafelyIgnored(DS4Controls trigger)
+    {
+        ConfigureAxis(true, trigger);
+        Frame(0, false);
+        Assert.IsTrue(Frame(.004, true).Cross);
+        for (int frame = 2; frame <= 260; frame++) Frame(frame * .004, true);
+        Assert.AreEqual(0, handler.Moves.Count);
+    }
+
+    [DataTestMethod]
+    [DataRow(false)]
+    [DataRow(true)]
+    public void AxisModeOrSourceChangeCancelsWithoutStartingOnAnAlreadyHeldButton(bool changeMode)
+    {
+        ConfigureAxis(true, DS4Controls.Cross);
+        Frame(0, false);
+        Frame(.004, true);
+        Frame(.008, true);
+        Assert.IsTrue(handler.Moves.Count > 0);
+        if (changeMode) Global.RSOutputSettings[Slot].mode = StickMode.Controls;
+        else Global.RSOutputSettings[Slot].outputSettings.flickSettings.calibrationTrigger = DS4Controls.Triangle;
+        handler.Moves.Clear();
+        for (int frame = 3; frame <= 260; frame++) Frame(frame * .004, true, true);
+        Assert.AreEqual(0, handler.Moves.Count);
+        ConfigureAxis(true, DS4Controls.Cross);
+        for (int frame = 261; frame <= 280; frame++) Frame(frame * .004, true);
+        Assert.AreEqual(0, handler.Moves.Count);
+        Frame(1.124, false);
+        Frame(1.128, true);
+        for (int frame = 283; frame <= 540; frame++) Frame(frame * .004, false);
+        Assert.AreEqual(1908, handler.Moves.Sum(move => move.X));
+    }
+
+    [TestMethod]
+    public void ReservingAButtonDoesNotEraseAnotherMappingIntoItsDestination()
+    {
+        ConfigureAxis(true, DS4Controls.Cross);
+        Global.store.GetDS4CSetting(Slot, DS4Controls.Triangle)
+            .UpdateSettings(false, X360Controls.A, "", DS4KeyType.None);
+        Frame(0, false);
+        Assert.IsTrue(Frame(.004, true, true).Cross,
+            "Triangle mapped to Cross must survive source-only reservation.");
+    }
+
+    [TestMethod]
+    public void AxisButtonSuppressesAnExistingKeyBindingWithoutOverwritingIt()
+    {
+        ConfigureAxis(true, DS4Controls.Cross);
+        var setting = Global.store.GetDS4CSetting(Slot, DS4Controls.Cross);
+        setting.UpdateSettings(false, (ushort)65, "", DS4KeyType.None);
+        Frame(0, false);
+        for (int frame = 1; frame <= 260; frame++) Frame(frame * .004, true);
+        Assert.IsTrue(Mapping.deviceState[Slot].keyPresses.Values.All(key =>
+            key.current.vkCount == 0 && key.current.scanCodeCount == 0));
+        Assert.AreEqual(DS4ControlSettings.ActionType.Key, setting.actionType);
+        Assert.AreEqual(1908, handler.Moves.Sum(move => move.X));
+    }
+
+    [DataTestMethod]
+    [DataRow(DS4Controls.L2, TwoStageTriggerMode.Disabled)]
+    [DataRow(DS4Controls.L2FullPull, TwoStageTriggerMode.Disabled)]
+    [DataRow(DS4Controls.R2, TwoStageTriggerMode.Disabled)]
+    [DataRow(DS4Controls.R2FullPull, TwoStageTriggerMode.Disabled)]
+    [DataRow(DS4Controls.L2, TwoStageTriggerMode.Normal)]
+    [DataRow(DS4Controls.L2FullPull, TwoStageTriggerMode.Normal)]
+    [DataRow(DS4Controls.R2, TwoStageTriggerMode.ExclusiveButtons)]
+    [DataRow(DS4Controls.R2FullPull, TwoStageTriggerMode.ExclusiveButtons)]
+    public void CalibratingWithATriggerReservesBothStagesWithoutChangingPhysicalInput(
+        DS4Controls trigger, TwoStageTriggerMode mode)
+    {
+        ConfigureAxis(true, trigger);
+        Global.L2OutputSettings[Slot].twoStageMode = mode;
+        Global.R2OutputSettings[Slot].twoStageMode = mode;
+        Global.store.GetDS4CSetting(Slot, DS4Controls.L2FullPull)
+            .UpdateSettings(false, X360Controls.A, "", DS4KeyType.None);
+        Global.store.GetDS4CSetting(Slot, DS4Controls.R2FullPull)
+            .UpdateSettings(false, X360Controls.A, "", DS4KeyType.None);
+        bool left = trigger is DS4Controls.L2 or DS4Controls.L2FullPull;
+        Frame(0, new DS4State());
+        for (int frame = 1; frame <= 260; frame++)
+        {
+            var input = new DS4State
+            {
+                L2 = left ? (byte)255 : (byte)0, L2Raw = left ? (byte)255 : (byte)0,
+                R2 = left ? (byte)0 : (byte)255, R2Raw = left ? (byte)0 : (byte)255,
+            };
+            var mapped = Frame(frame * .004, input);
+            Assert.AreEqual((byte)255, left ? input.L2 : input.R2);
+            Assert.AreEqual((byte)0, mapped.L2);
+            Assert.AreEqual((byte)0, mapped.R2);
+            Assert.IsFalse(mapped.Cross);
+        }
+        Assert.AreEqual(1908, handler.Moves.Sum(move => move.X));
+    }
+
+    private static void ConfigureAxis(bool right, DS4Controls trigger, double calibration = 5.3)
+    {
+        var settings = right ? Global.RSOutputSettings[Slot] : Global.LSOutputSettings[Slot];
+        settings.mode = StickMode.FlickStick;
+        settings.outputSettings.flickSettings.calibrationTrigger = trigger;
+        settings.outputSettings.flickSettings.realWorldCalibration = calibration;
+    }
+
     [TestMethod]
     public void ReleaseCompletesTurnAndResetCancelsWithoutHeldRestart()
     {
@@ -130,13 +292,18 @@ public class FlickStickCalibrationMappingTests
     }
 
     [DataTestMethod]
-    [DataRow("removed")]
-    [DataRow("removing")]
-    [DataRow("unsynced")]
-    [DataRow("owner")]
-    public void UnavailableControllerCannotContinueCalibration(string reason)
+    [DataRow("removed", false)]
+    [DataRow("removing", false)]
+    [DataRow("unsynced", false)]
+    [DataRow("owner", false)]
+    [DataRow("removed", true)]
+    [DataRow("removing", true)]
+    [DataRow("unsynced", true)]
+    [DataRow("owner", true)]
+    public void UnavailableControllerCannotContinueCalibration(string reason, bool axis)
     {
-        Bind();
+        if (axis) ConfigureAxis(true, DS4Controls.Cross);
+        else Bind();
         Frame(0, false);
         Frame(.004, true);
         Frame(.008, true);
@@ -213,11 +380,17 @@ public class FlickStickCalibrationMappingTests
     private DS4State Frame(double seconds, bool cross, bool triangle = false)
     {
         var source = new DS4State { Cross = cross, Triangle = triangle, elapsedTime = .004 };
+        var mapped = Frame(seconds, source);
+        Assert.AreEqual(cross, source.Cross, "The physical snapshot must remain intact.");
+        return mapped;
+    }
+
+    private DS4State Frame(double seconds, DS4State source)
+    {
         var mapped = new DS4State();
         source.CopyExtrasTo(mapped);
         Mapping.MapCustom(Slot, source, mapped, new DS4StateExposed(source), mouse, service,
             10 * Stopwatch.Frequency + (long)Math.Round(seconds * Stopwatch.Frequency));
-        Assert.AreEqual(cross, source.Cross, "The physical snapshot must remain intact.");
         return mapped;
     }
 

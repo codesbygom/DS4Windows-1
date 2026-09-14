@@ -2668,6 +2668,7 @@ namespace DS4WinWPF.DS4Control.DTOXml
                     FlickThreshold = source.lsOutputSettings[deviceIndex].outputSettings.flickSettings.flickThreshold,
                     FlickTime = source.lsOutputSettings[deviceIndex].outputSettings.flickSettings.flickTime,
                     MinAngleThreshold = source.lsOutputSettings[deviceIndex].outputSettings.flickSettings.minAngleThreshold,
+                    CalibrationTrigger = source.lsOutputSettings[deviceIndex].outputSettings.flickSettings.calibrationTrigger,
                 },
             };
             RSOutputSettings = new StickModeOutputSettings()
@@ -2678,6 +2679,7 @@ namespace DS4WinWPF.DS4Control.DTOXml
                     FlickThreshold = source.rsOutputSettings[deviceIndex].outputSettings.flickSettings.flickThreshold,
                     FlickTime = source.rsOutputSettings[deviceIndex].outputSettings.flickSettings.flickTime,
                     MinAngleThreshold = source.rsOutputSettings[deviceIndex].outputSettings.flickSettings.minAngleThreshold,
+                    CalibrationTrigger = source.rsOutputSettings[deviceIndex].outputSettings.flickSettings.calibrationTrigger,
                 },
             };
 
@@ -3552,6 +3554,11 @@ namespace DS4WinWPF.DS4Control.DTOXml
             destination.lsOutputSettings[deviceIndex].mode = LSOutputMode;
             destination.rsOutputSettings[deviceIndex].mode = RSOutputMode;
 
+            destination.lsOutputSettings[deviceIndex].outputSettings.flickSettings.calibrationTrigger =
+                LSOutputSettings?.FlickStickSettings?.CalibrationTrigger ?? DS4Controls.None;
+            destination.rsOutputSettings[deviceIndex].outputSettings.flickSettings.calibrationTrigger =
+                RSOutputSettings?.FlickStickSettings?.CalibrationTrigger ?? DS4Controls.None;
+
             if (LSOutputSettings != null)
             {
                 if (LSOutputSettings.FlickStickSettings != null)
@@ -4324,6 +4331,16 @@ namespace DS4WinWPF.DS4Control.DTOXml
 
     public class FlickStickSettings
     {
+        [XmlIgnore]
+        public DS4Controls CalibrationTrigger { get; set; } = DS4Controls.None;
+
+        [XmlElement("CalibrationTrigger")]
+        public string CalibrationTriggerString
+        {
+            get => Enum.GetName(typeof(DS4Controls), CalibrationTrigger) ?? nameof(DS4Controls.None);
+            set => CalibrationTrigger = DS4Windows.FlickStickSettings.ParseCalibrationTrigger(value);
+        }
+
         [XmlElement("RealWorldCalibration")]
         public double RealWorldCalibration
         {

@@ -5875,6 +5875,7 @@ namespace DS4Windows
 
                 XmlElement xmlLsOutputSettingsElement = m_Xdoc.CreateElement("LSOutputSettings");
                 XmlElement xmlLsFlickStickGroupElement = m_Xdoc.CreateElement("FlickStickSettings"); xmlLsOutputSettingsElement.AppendChild(xmlLsFlickStickGroupElement);
+                XmlNode xmlLsCalibrationTrigger = m_Xdoc.CreateNode(XmlNodeType.Element, "CalibrationTrigger", null); xmlLsCalibrationTrigger.InnerText = Enum.GetName(typeof(DS4Controls), lsOutputSettings[device].outputSettings.flickSettings.calibrationTrigger) ?? nameof(DS4Controls.None); xmlLsFlickStickGroupElement.AppendChild(xmlLsCalibrationTrigger);
                 XmlNode xmlLsFlickStickRWC = m_Xdoc.CreateNode(XmlNodeType.Element, "RealWorldCalibration", null); xmlLsFlickStickRWC.InnerText = lsOutputSettings[device].outputSettings.flickSettings.realWorldCalibration.ToString(); xmlLsFlickStickGroupElement.AppendChild(xmlLsFlickStickRWC);
                 XmlNode xmlLsFlickStickThreshold = m_Xdoc.CreateNode(XmlNodeType.Element, "FlickThreshold", null); xmlLsFlickStickThreshold.InnerText = lsOutputSettings[device].outputSettings.flickSettings.flickThreshold.ToString(); xmlLsFlickStickGroupElement.AppendChild(xmlLsFlickStickThreshold);
                 XmlNode xmlLsFlickStickTime = m_Xdoc.CreateNode(XmlNodeType.Element, "FlickTime", null); xmlLsFlickStickTime.InnerText = lsOutputSettings[device].outputSettings.flickSettings.flickTime.ToString(); xmlLsFlickStickGroupElement.AppendChild(xmlLsFlickStickTime);
@@ -5883,6 +5884,7 @@ namespace DS4Windows
 
                 XmlElement xmlRsOutputSettingsElement = m_Xdoc.CreateElement("RSOutputSettings");
                 XmlElement xmlRsFlickStickGroupElement = m_Xdoc.CreateElement("FlickStickSettings"); xmlRsOutputSettingsElement.AppendChild(xmlRsFlickStickGroupElement);
+                XmlNode xmlRsCalibrationTrigger = m_Xdoc.CreateNode(XmlNodeType.Element, "CalibrationTrigger", null); xmlRsCalibrationTrigger.InnerText = Enum.GetName(typeof(DS4Controls), rsOutputSettings[device].outputSettings.flickSettings.calibrationTrigger) ?? nameof(DS4Controls.None); xmlRsFlickStickGroupElement.AppendChild(xmlRsCalibrationTrigger);
                 XmlNode xmlRsFlickStickRWC = m_Xdoc.CreateNode(XmlNodeType.Element, "RealWorldCalibration", null); xmlRsFlickStickRWC.InnerText = rsOutputSettings[device].outputSettings.flickSettings.realWorldCalibration.ToString(); xmlRsFlickStickGroupElement.AppendChild(xmlRsFlickStickRWC);
                 XmlNode xmlRsFlickStickThreshold = m_Xdoc.CreateNode(XmlNodeType.Element, "FlickThreshold", null); xmlRsFlickStickThreshold.InnerText = rsOutputSettings[device].outputSettings.flickSettings.flickThreshold.ToString(); xmlRsFlickStickGroupElement.AppendChild(xmlRsFlickStickThreshold);
                 XmlNode xmlRsFlickStickTime = m_Xdoc.CreateNode(XmlNodeType.Element, "FlickTime", null); xmlRsFlickStickTime.InnerText = rsOutputSettings[device].outputSettings.flickSettings.flickTime.ToString(); xmlRsFlickStickGroupElement.AppendChild(xmlRsFlickStickTime);
@@ -8325,6 +8327,10 @@ namespace DS4Windows
 
                     if (flickStickLSGroup)
                     {
+                        lsOutputSettings[device].outputSettings.flickSettings.calibrationTrigger =
+                            FlickStickSettings.ParseCalibrationTrigger(
+                                xmlFlickStickLSElement.SelectSingleNode("CalibrationTrigger")?.InnerText);
+
                         try
                         {
                             Item = xmlFlickStickLSElement.SelectSingleNode("RealWorldCalibration");
@@ -8381,6 +8387,10 @@ namespace DS4Windows
 
                     if (flickStickRSGroup)
                     {
+                        rsOutputSettings[device].outputSettings.flickSettings.calibrationTrigger =
+                            FlickStickSettings.ParseCalibrationTrigger(
+                                xmlFlickStickRSElement.SelectSingleNode("CalibrationTrigger")?.InnerText);
+
                         try
                         {
                             Item = xmlFlickStickRSElement.SelectSingleNode("RealWorldCalibration");

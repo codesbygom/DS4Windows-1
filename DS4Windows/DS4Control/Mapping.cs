@@ -2319,6 +2319,82 @@ namespace DS4Windows
             new FlickStickCalibrationTurn[Global.MAX_DS4_CONTROLLER_COUNT];
         private static readonly int[] flickCalibrationResetGenerations =
             new int[Global.MAX_DS4_CONTROLLER_COUNT];
+        private static readonly DS4Controls[] leftAxisCalibrationTriggers =
+            new DS4Controls[Global.MAX_DS4_CONTROLLER_COUNT];
+        private static readonly DS4Controls[] rightAxisCalibrationTriggers =
+            new DS4Controls[Global.MAX_DS4_CONTROLLER_COUNT];
+
+        private static DS4Controls GetAxisCalibrationTrigger(StickOutputSetting settings)
+        {
+            DS4Controls control = settings.outputSettings.flickSettings.calibrationTrigger;
+            int index = (int)control;
+            if (settings.mode != StickMode.FlickStick || index <= 0 ||
+                index >= DS4StateFieldMapping.mappedType.Length) return DS4Controls.None;
+            return DS4StateFieldMapping.mappedType[index] is
+                DS4StateFieldMapping.ControlType.Button or
+                DS4StateFieldMapping.ControlType.Trigger or
+                DS4StateFieldMapping.ControlType.Touch ? control : DS4Controls.None;
+        }
+
+        private static bool IsAxisCalibrationControl(DS4Controls control, DS4Controls trigger) =>
+            trigger != DS4Controls.None && (control == trigger ||
+                (control is DS4Controls.L2 or DS4Controls.L2FullPull &&
+                    trigger is DS4Controls.L2 or DS4Controls.L2FullPull) ||
+                (control is DS4Controls.R2 or DS4Controls.R2FullPull &&
+                    trigger is DS4Controls.R2 or DS4Controls.R2FullPull));
+
+        private static bool IsAxisCalibrationControl(int device, DS4Controls control) =>
+            IsAxisCalibrationControl(control, leftAxisCalibrationTriggers[device]) ||
+            IsAxisCalibrationControl(control, rightAxisCalibrationTriggers[device]);
+
+        private static void ReadAxisFlickCalibration(int device, DS4State state,
+            DS4State mappedState, DS4StateExposed exposed, Mouse mouse,
+            DS4StateFieldMapping source, DS4StateFieldMapping output)
+        {
+            DS4Controls left = GetAxisCalibrationTrigger(Global.LSOutputSettings[device]);
+            DS4Controls right = GetAxisCalibrationTrigger(Global.RSOutputSettings[device]);
+            if (leftAxisCalibrationTriggers[device] != left ||
+                rightAxisCalibrationTriggers[device] != right)
+            {
+                leftAxisCalibrationTriggers[device] = left;
+                rightAxisCalibrationTriggers[device] = right;
+                ResetFlickStickCalibration(device);
+            }
+
+            // Observe both sides before reserving either button. If the same
+            // button is selected twice the one-shot lane chooses one RS turn.
+            if (left != DS4Controls.None && GetBoolMapping(device, left, state, exposed, mouse, source))
+                flickCalibrationTurns[device].Press(false);
+            if (right != DS4Controls.None && GetBoolMapping(device, right, state, exposed, mouse, source))
+                flickCalibrationTurns[device].Press(true);
+            SuppressAxisCalibrationTrigger(left, state, mappedState, source, output);
+            if (right != left)
+                SuppressAxisCalibrationTrigger(right, state, mappedState, source, output);
+        }
+
+        private static void SuppressAxisCalibrationTrigger(DS4Controls control,
+            DS4State state, DS4State mappedState, DS4StateFieldMapping source,
+            DS4StateFieldMapping output)
+        {
+            if (control == DS4Controls.None) return;
+            ResetToDefaultValue(control, state, source);
+            ResetToDefaultValue(control, mappedState, output);
+            // Both stages share one physical trigger. Reserving it for a test
+            // must not also fire its ordinary soft/full-pull game binding.
+            DS4Controls other = control switch
+            {
+                DS4Controls.L2 => DS4Controls.L2FullPull,
+                DS4Controls.L2FullPull => DS4Controls.L2,
+                DS4Controls.R2 => DS4Controls.R2FullPull,
+                DS4Controls.R2FullPull => DS4Controls.R2,
+                _ => DS4Controls.None,
+            };
+            if (other != DS4Controls.None)
+            {
+                ResetToDefaultValue(other, state, source);
+                ResetToDefaultValue(other, mappedState, output);
+            }
+        }
 
         internal static void ResetFlickStickCalibration(int device)
         {
@@ -2427,6 +2503,11 @@ namespace DS4Windows
             //DS4StateFieldMapping outputfieldMapping = new DS4StateFieldMapping(cState, eState, tp);
 
             SyntheticState deviceState = Mapping.deviceState[device];
+            // Calibration is an Axis Config command, not a button remap or
+            // Special Action. Reserve its normal output before either runs;
+            // only field maps change, never the physical report snapshot.
+            ReadAxisFlickCalibration(device, cState, MappedState, eState, tp,
+                fieldMapping, outputfieldMapping);
             if (getProfileActionCount(device) > 0 || useTempProfile[device])
                 MapCustomAction(device, cState, MappedState, eState, tp, ctrl, fieldMapping, outputfieldMapping);
             //if (ctrl.DS4Controllers[device] == null) return;
@@ -2499,6 +2580,7 @@ namespace DS4Windows
                         break;
                     case StickMode.FlickStick:
                         DS4Device d = ctrl.DS4Controllers[device];
+                        if (d == null || !d.Synced || d.IsRemoving || d.IsRemoved) break;
                         DS4State cRawState = d.getCurrentStateRef();
                         DS4State pState = d.getPreviousStateRef();
 
@@ -2556,6 +2638,7 @@ namespace DS4Windows
                         break;
                     case StickMode.FlickStick:
                         DS4Device d = ctrl.DS4Controllers[device];
+                        if (d == null || !d.Synced || d.IsRemoving || d.IsRemoved) break;
                         DS4State cRawState = d.getCurrentStateRef();
                         DS4State pState = d.getPreviousStateRef();
 
@@ -3873,7 +3956,7 @@ namespace DS4Windows
             }
 
 
-            if (!switch2ModeShiftActivationConsumed &&
+            if (!switch2ModeShiftActivationConsumed && !IsAxisCalibrationControl(device, dcs.control) &&
                 dcs.LightbarMacro is not null && dcs.LightbarMacro.Active)
             {
                 if (BoolDS4Controls.Contains(dcs.control))

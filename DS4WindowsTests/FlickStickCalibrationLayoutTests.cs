@@ -7,6 +7,7 @@ using System.Windows.Markup;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using System.Xml.Linq;
+using DS4Windows;
 
 namespace DS4WindowsTests;
 
@@ -19,60 +20,70 @@ public class FlickStickCalibrationLayoutTests
     public TestContext TestContext { get; set; }
 
     [DataTestMethod]
-    [DataRow("DefaultTheme", 630, 96)]
-    [DataRow("DefaultTheme", 630, 144)]
-    [DataRow("DefaultTheme", 812, 96)]
-    [DataRow("DarkTheme", 630, 96)]
-    [DataRow("DarkTheme", 630, 144)]
-    [DataRow("DarkTheme", 812, 96)]
-    public void CalibrationTabFitsItsButtonsAndWrappedInstructionsOffscreen(
+    [DataRow("DefaultTheme", 360, 96)]
+    [DataRow("DefaultTheme", 360, 144)]
+    [DataRow("DefaultTheme", 640, 96)]
+    [DataRow("DefaultTheme", 640, 144)]
+    [DataRow("DarkTheme", 360, 96)]
+    [DataRow("DarkTheme", 360, 144)]
+    [DataRow("DarkTheme", 640, 96)]
+    [DataRow("DarkTheme", 640, 144)]
+    public void AxisCalibrationPanelsFitTheirSelectorsAndWrappedGuidanceOffscreen(
         string theme, int width, int dpi)
     {
         string renderedPath = null;
         RunSta(() =>
         {
-            // Load only the real tab markup: no Application, Window,
-            // BindingWindow constructor, ControlService, or device exists.
-            Border host = CreateProductionTabHost(theme);
+            // Load the production Axis Config panels without constructing an
+            // Application, ProfileEditor, Window, ControlService, or device.
+            Border host = CreateProductionPanelHost(theme, new CalibrationLayoutModel());
             host.Measure(new Size(width, double.PositiveInfinity));
             int height = (int)Math.Ceiling(host.DesiredSize.Height);
-            Assert.IsTrue(height > 80 && height <= 320,
+            Assert.IsTrue(height > 160 && height <= 460,
                 $"Calibration content should remain compact at {width} DIPs: {height}.");
             host.Arrange(new Rect(0, 0, width, height));
             host.UpdateLayout();
             Assert.IsNull(PresentationSource.FromVisual(host),
                 "Rendering must not connect to a live window or desktop surface.");
 
-            Button[] buttons = VisualDescendants<Button>(host).ToArray();
-            Assert.AreEqual(2, buttons.Length);
-            foreach (Button button in buttons)
+            StackPanel[] panels = VisualDescendants<StackPanel>(host)
+                .Where(panel => panel.Name.EndsWith("FlickCalibrationPanel", StringComparison.Ordinal)).ToArray();
+            Assert.AreEqual(2, panels.Length);
+            foreach (StackPanel panel in panels)
             {
-                AssertInside(host, button);
-                Assert.IsTrue(button.ActualWidth > 180 && button.ActualHeight >= 24,
-                    $"{button.Name} needs a full action label and a usable target.");
-                TextBlock label = VisualDescendants<TextBlock>(button).Single(text =>
-                    text.Text == (string)button.Content);
-                AssertInside(button, label);
-                AssertUncroppedText(label);
-            }
-            Rect left = BoundsIn(host, buttons[0]);
-            Rect right = BoundsIn(host, buttons[1]);
-            Assert.IsTrue(left.Bottom <= right.Top,
-                "The two stick choices must remain separate, visible targets.");
+                AssertInside(host, panel);
+                ComboBox selector = VisualDescendants<ComboBox>(panel).Single();
+                AssertInside(panel, selector);
+                Assert.IsTrue(selector.ActualWidth >= 280 && selector.ActualHeight >= 28,
+                    $"{selector.Name} needs space for a controller button label.");
+                Assert.AreEqual(DS4Controls.Switch2JoyConRightPaddle1, selector.SelectedValue);
+                TextBlock selectedLabel = VisualDescendants<TextBlock>(selector).Single(text =>
+                    text.Text == CalibrationLayoutModel.LongButtonLabel);
+                AssertInside(selector, selectedLabel);
+                AssertUncroppedText(selectedLabel);
 
-            TextBlock[] instructions = VisualDescendants<TextBlock>(host)
-                .Where(text => text.Text.StartsWith("Bind either action", StringComparison.Ordinal) ||
-                    text.Text.StartsWith("In Axis Config", StringComparison.Ordinal)).ToArray();
-            Assert.AreEqual(2, instructions.Length);
-            foreach (TextBlock text in instructions)
-            {
-                AssertInside(host, text);
-                Assert.AreEqual(TextWrapping.Wrap, text.TextWrapping);
-                Assert.AreEqual(TextTrimming.None, text.TextTrimming);
-                AssertUncroppedText(text);
-                Assert.IsTrue(BoundsIn(host, text).Left >= Math.Max(left.Right, right.Right),
-                    "Calibration guidance must not overlap either action button.");
+                Label label = VisualDescendants<Label>(panel).Single();
+                Assert.AreEqual("360° test button", label.Content);
+                AssertInside(panel, label);
+                Assert.IsTrue(BoundsIn(panel, label).Bottom <= BoundsIn(panel, selector).Top);
+
+                TextBlock[] guidance = panel.Children.OfType<TextBlock>().ToArray();
+                Assert.AreEqual(2, guidance.Length);
+                foreach (TextBlock text in guidance)
+                {
+                    AssertInside(panel, text);
+                    Assert.AreEqual(TextWrapping.Wrap, text.TextWrapping);
+                    Assert.AreEqual(TextTrimming.None, text.TextTrimming);
+                    AssertUncroppedText(text);
+                    Assert.IsTrue(BoundsIn(panel, text).Top >= BoundsIn(panel, selector).Bottom,
+                        "Calibration guidance must not overlap the selector.");
+                }
+                Assert.IsTrue(BoundsIn(panel, guidance[0]).Bottom <= BoundsIn(panel, guidance[1]).Top);
             }
+            Rect left = BoundsIn(host, panels[0]);
+            Rect right = BoundsIn(host, panels[1]);
+            Assert.IsTrue(left.Bottom <= right.Top,
+                "The left and right calibration settings must remain separate.");
 
             var bitmap = new RenderTargetBitmap((int)Math.Ceiling(width * dpi / 96d),
                 (int)Math.Ceiling(height * dpi / 96d), dpi, dpi, PixelFormats.Pbgra32);
@@ -84,7 +95,7 @@ public class FlickStickCalibrationLayoutTests
             {
                 Directory.CreateDirectory(directory);
                 renderedPath = Path.Combine(directory,
-                    $"flick-calibration-{theme}-{width}-{dpi}.png");
+                    $"flick-calibration-axis-{theme}-{width}-{dpi}.png");
                 var encoder = new PngBitmapEncoder();
                 encoder.Frames.Add(BitmapFrame.Create(bitmap));
                 using (var stream = File.Create(renderedPath)) encoder.Save(stream);
@@ -94,14 +105,111 @@ public class FlickStickCalibrationLayoutTests
             TestContext.AddResultFile(renderedPath);
     }
 
-    private static Border CreateProductionTabHost(string theme)
+    [DataTestMethod]
+    [DataRow(true, 0)]
+    [DataRow(true, 1)]
+    [DataRow(true, 2)]
+    [DataRow(false, 0)]
+    [DataRow(false, 1)]
+    [DataRow(false, 2)]
+    public void EachAxisCalibrationSelectorIsEnabledOnlyForItsOwnFlickStickMode(bool left, int mode)
     {
-        var document = XDocument.Load(BindingWindowPath());
-        XElement productionTab = document.Descendants(Wpf + "TabItem").Single(element =>
-            (string)element.Attribute(Xaml + "Name") == "flickStickCalibrationTab");
+        RunSta(() =>
+        {
+            var model = new CalibrationLayoutModel();
+            if (left) model.LSOutputIndex = mode;
+            else model.RSOutputIndex = mode;
+            Border host = CreateProductionPanelHost("DefaultTheme", model);
+            host.Measure(new Size(360, double.PositiveInfinity));
+            host.Arrange(new Rect(new Point(), host.DesiredSize));
+            host.UpdateLayout();
+            ComboBox[] selectors = VisualDescendants<ComboBox>(host).ToArray();
+            ComboBox selected = selectors.Single(combo => combo.Name.StartsWith(left ? "ls" : "rs"));
+            ComboBox other = selectors.Single(combo => combo != selected);
+            Assert.AreEqual(mode == (int)StickMode.FlickStick, selected.IsEnabled);
+            Assert.IsTrue(other.IsEnabled, "The other stick keeps its independent Flick Stick mode.");
+            if (selected.IsEnabled)
+            {
+                selected.SetCurrentValue(ComboBox.SelectedValueProperty, DS4Controls.None);
+                selected.GetBindingExpression(ComboBox.SelectedValueProperty).UpdateSource();
+                Assert.AreEqual(DS4Controls.None,
+                    left ? model.LSFlickCalibrationTrigger : model.RSFlickCalibrationTrigger);
+                Assert.AreEqual(DS4Controls.Switch2JoyConRightPaddle1,
+                    left ? model.RSFlickCalibrationTrigger : model.LSFlickCalibrationTrigger);
+            }
+            Assert.IsNull(PresentationSource.FromVisual(host));
+        });
+    }
+
+    [TestMethod]
+    public void CalibrationSelectorsLiveBesideEachSticksCalibrationInAxisConfig()
+    {
+        XDocument document = XDocument.Load(FormPath("ProfileEditor.xaml"));
+        foreach (string stick in new[] { "LS", "RS" })
+        {
+            XElement panel = CalibrationPanel(document, stick);
+            Assert.AreEqual("4", (string)panel.Attribute("Grid.Row"));
+            Assert.AreEqual("2", (string)panel.Attribute("Grid.ColumnSpan"));
+            XElement grid = panel.Parent;
+            Assert.AreEqual(Wpf + "Grid", grid.Name);
+            XElement[] rows = grid.Element(Wpf + "Grid.RowDefinitions").Elements().ToArray();
+            Assert.AreEqual(5, rows.Length);
+            Assert.AreEqual("Auto", (string)rows[4].Attribute("Height"));
+            Assert.IsTrue(grid.Descendants().Attributes("Value").Any(attribute =>
+                attribute.Value.StartsWith("{Binding " + stick + "FlickRWC", StringComparison.Ordinal)));
+            Assert.AreEqual("{lex:Loc FlickStick}",
+                (string)panel.Ancestors(Wpf + "TabItem").First().Attribute("Header"));
+            Assert.AreEqual("{lex:Loc AxisConfig}",
+                (string)panel.Ancestors(Wpf + "TabItem").Last().Attribute("Header"));
+
+            XElement selector = panel.Element(Wpf + "ComboBox");
+            Assert.AreEqual("{Binding FlickCalibrationTriggerChoices}", (string)selector.Attribute("ItemsSource"));
+            Assert.AreEqual("Label", (string)selector.Attribute("DisplayMemberPath"));
+            Assert.AreEqual("Control", (string)selector.Attribute("SelectedValuePath"));
+            Assert.AreEqual("{Binding " + stick + "FlickCalibrationTrigger}", (string)selector.Attribute("SelectedValue"));
+            string guidance = string.Join(" ", panel.Elements(Wpf + "TextBlock")
+                .Select(text => (string)text.Attribute("Text")));
+            StringAssert.Contains(guidance, "Save the profile");
+            StringAssert.Contains(guidance, "in-game");
+            StringAssert.Contains(guidance, "Increase Real World Calibration");
+            StringAssert.Contains(guidance, "decrease it");
+            StringAssert.Contains(guidance, "Not assigned to release the button");
+        }
+
+        XDocument remapper = XDocument.Load(FormPath("BindingWindow.xaml"));
+        Assert.IsFalse(remapper.Descendants().Attributes().Any(attribute =>
+            attribute.Value.Contains("flickStickCalibr", StringComparison.OrdinalIgnoreCase)),
+            "Calibration settings must not reappear as remapping actions.");
+    }
+
+    [TestMethod]
+    public void AxisTriggerTuningKeepsItsNormalRowsAndLeavesAdaptiveEffectsInTriggerLab()
+    {
+        XDocument document = XDocument.Load(FormPath("ProfileEditor.xaml"));
+        XElement triggers = document.Descendants(Wpf + "GroupBox").Single(element =>
+            (string)element.Attribute("Header") == "L2 & R2").Element(Wpf + "Grid");
+        Assert.AreEqual(8, triggers.Element(Wpf + "Grid.RowDefinitions").Elements().Count());
+        Assert.IsTrue(triggers.Elements().Attributes("Grid.Row").All(attribute => int.Parse(attribute.Value) < 8));
+        string markup = document.ToString();
+        foreach (string stick in new[] { "L2", "R2" })
+        {
+            Assert.IsFalse(markup.Contains("{Binding " + stick + "TriggerEffect", StringComparison.Ordinal));
+            foreach (string setting in new[] { "DeadZone", "MaxZone", "AntiDeadZone", "MaxOutput", "Sens", "OutputCurveIndex", "CustomCurve" })
+                StringAssert.Contains(triggers.ToString(), "{Binding " + stick + setting);
+        }
+        Assert.IsFalse(markup.Contains("TriggerEffectChoices", StringComparison.Ordinal));
+        Assert.IsTrue(document.Descendants().Any(element =>
+            (string)element.Attribute(Xaml + "Name") == "profileTriggerLabControl"));
+    }
+
+    private static Border CreateProductionPanelHost(string theme, CalibrationLayoutModel model)
+    {
+        var document = XDocument.Load(FormPath("ProfileEditor.xaml"));
         var markup = new XElement(Wpf + "Border",
             new XAttribute(XNamespace.Xmlns + "x", Xaml.NamespaceName),
-            new XElement(Wpf + "TabControl", new XElement(productionTab)));
+            new XElement(Wpf + "StackPanel", new[] { "LS", "RS" }.Select(stick =>
+                new XElement(Wpf + "GroupBox", new XAttribute("Header", stick),
+                    new XElement(CalibrationPanel(document, stick))))));
         var host = (Border)XamlReader.Parse(markup.ToString());
         host.Resources.MergedDictionaries.Add(new ResourceDictionary
         {
@@ -110,8 +218,32 @@ public class FlickStickCalibrationLayoutTests
         host.Background = (Brush)host.FindResource("BackgroundColor");
         TextElement.SetForeground(host, theme == "DefaultTheme" ? SystemColors.WindowTextBrush :
             (Brush)host.FindResource("ForegroundColor"));
-        ((TabControl)host.Child).SelectedIndex = 0;
+        host.DataContext = model;
         return host;
+    }
+
+    private static XElement CalibrationPanel(XDocument document, string stick) =>
+        document.Descendants(Wpf + "StackPanel").Single(element =>
+            (string)element.Attribute(Xaml + "Name") == stick.ToLowerInvariant() + "FlickCalibrationPanel");
+
+    public sealed class CalibrationLayoutModel
+    {
+        public const string LongButtonLabel = "Switch 2 Joy-Con Right Paddle 1";
+        public int LSOutputIndex { get; set; } = (int)StickMode.FlickStick;
+        public int RSOutputIndex { get; set; } = (int)StickMode.FlickStick;
+        public DS4Controls LSFlickCalibrationTrigger { get; set; } = DS4Controls.Switch2JoyConRightPaddle1;
+        public DS4Controls RSFlickCalibrationTrigger { get; set; } = DS4Controls.Switch2JoyConRightPaddle1;
+        public CalibrationChoice[] FlickCalibrationTriggerChoices { get; } = new CalibrationChoice[]
+        {
+            new() { Control = DS4Controls.None, Label = "Not assigned" },
+            new() { Control = DS4Controls.Switch2JoyConRightPaddle1, Label = LongButtonLabel },
+        };
+    }
+
+    public sealed class CalibrationChoice
+    {
+        public DS4Controls Control { get; set; }
+        public string Label { get; set; }
     }
 
     private static void AssertUncroppedText(TextBlock actual)
@@ -161,8 +293,8 @@ public class FlickStickCalibrationLayoutTests
         }
     }
 
-    private static string BindingWindowPath([CallerFilePath] string caller = "") =>
-        Path.Combine(Path.GetDirectoryName(caller)!, "..", "DS4Windows", "DS4Forms", "BindingWindow.xaml");
+    private static string FormPath(string name, [CallerFilePath] string caller = "") =>
+        Path.Combine(Path.GetDirectoryName(caller)!, "..", "DS4Windows", "DS4Forms", name);
 
     private static void RunSta(Action action)
     {

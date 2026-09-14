@@ -803,6 +803,7 @@
                                                 <RowDefinition Style="{StaticResource gridRowHeight}" />
                                                 <RowDefinition Style="{StaticResource gridRowHeight}" />
                                                 <RowDefinition Style="{StaticResource gridRowHeight}" />
+                                                <RowDefinition Height="Auto" />
                                             </Grid.RowDefinitions>
 
                                             <Label Content="{lex:Loc RealWorldCalibration}" ContentStringFormat="{}{0}:" Grid.Row="0" Grid.Column="0" />
@@ -826,6 +827,28 @@
                                                 <xctk:DoubleUpDown d:IsHidden="True" Value="{Binding LSMinAngleThreshold,UpdateSourceTrigger=LostFocus}" FormatString="F2" MinWidth="50" Maximum="180.0" Minimum="0.0" Increment="0.5"
                                                    Margin="{StaticResource spaceMargin}" />
                                             </DockPanel>
+                                            <StackPanel x:Name="lsFlickCalibrationPanel" Grid.Row="4" Grid.ColumnSpan="2" Margin="0,8,0,6">
+                                                <StackPanel.Style>
+                                                    <Style TargetType="{x:Type StackPanel}">
+                                                        <Setter Property="IsEnabled" Value="False" />
+                                                        <Style.Triggers>
+                                                            <DataTrigger Binding="{Binding LSOutputIndex}" Value="2">
+                                                                <Setter Property="IsEnabled" Value="True" />
+                                                            </DataTrigger>
+                                                        </Style.Triggers>
+                                                    </Style>
+                                                </StackPanel.Style>
+                                                <Label Content="360° test button" Target="{Binding ElementName=lsFlickCalibrationTriggerCombo}" />
+                                                <ComboBox x:Name="lsFlickCalibrationTriggerCombo" MinHeight="28"
+                                                          ItemsSource="{Binding FlickCalibrationTriggerChoices}"
+                                                          DisplayMemberPath="Label" SelectedValuePath="Control"
+                                                          SelectedValue="{Binding LSFlickCalibrationTrigger}"
+                                                          ToolTip="This button is reserved for calibration while the left stick uses Flick Stick." />
+                                                <TextBlock Margin="0,6,0,0" TextWrapping="Wrap"
+                                                           Text="Save the profile, then tap the selected button in-game for a 360° mouse-look turn. Active only in Flick Stick mode." />
+                                                <TextBlock Margin="0,4,0,0" TextWrapping="Wrap"
+                                                           Text="Increase Real World Calibration if the turn falls short; decrease it if the turn goes too far. Choose Not assigned to release the button." />
+                                            </StackPanel>
                                         </Grid>
                                     </TabItem>
                                 </TabControl>
@@ -1111,6 +1134,7 @@
                                                 <RowDefinition Style="{StaticResource gridRowHeight}" />
                                                 <RowDefinition Style="{StaticResource gridRowHeight}" />
                                                 <RowDefinition Style="{StaticResource gridRowHeight}" />
+                                                <RowDefinition Height="Auto" />
                                             </Grid.RowDefinitions>
 
                                             <Label Content="{lex:Loc RealWorldCalibration}" ContentStringFormat="{}{0}:" Grid.Row="0" Grid.Column="0" />
@@ -1134,6 +1158,28 @@
                                                 <xctk:DoubleUpDown d:IsHidden="True" Value="{Binding RSMinAngleThreshold,UpdateSourceTrigger=LostFocus}" FormatString="F2" MinWidth="50" Maximum="180.0" Minimum="0.0" Increment="0.5"
                                                    Margin="{StaticResource spaceMargin}" />
                                             </DockPanel>
+                                            <StackPanel x:Name="rsFlickCalibrationPanel" Grid.Row="4" Grid.ColumnSpan="2" Margin="0,8,0,6">
+                                                <StackPanel.Style>
+                                                    <Style TargetType="{x:Type StackPanel}">
+                                                        <Setter Property="IsEnabled" Value="False" />
+                                                        <Style.Triggers>
+                                                            <DataTrigger Binding="{Binding RSOutputIndex}" Value="2">
+                                                                <Setter Property="IsEnabled" Value="True" />
+                                                            </DataTrigger>
+                                                        </Style.Triggers>
+                                                    </Style>
+                                                </StackPanel.Style>
+                                                <Label Content="360° test button" Target="{Binding ElementName=rsFlickCalibrationTriggerCombo}" />
+                                                <ComboBox x:Name="rsFlickCalibrationTriggerCombo" MinHeight="28"
+                                                          ItemsSource="{Binding FlickCalibrationTriggerChoices}"
+                                                          DisplayMemberPath="Label" SelectedValuePath="Control"
+                                                          SelectedValue="{Binding RSFlickCalibrationTrigger}"
+                                                          ToolTip="This button is reserved for calibration while the right stick uses Flick Stick." />
+                                                <TextBlock Margin="0,6,0,0" TextWrapping="Wrap"
+                                                           Text="Save the profile, then tap the selected button in-game for a 360° mouse-look turn. Active only in Flick Stick mode." />
+                                                <TextBlock Margin="0,4,0,0" TextWrapping="Wrap"
+                                                           Text="Increase Real World Calibration if the turn falls short; decrease it if the turn goes too far. Choose Not assigned to release the button." />
+                                            </StackPanel>
                                         </Grid>
                                     </TabItem>
                                 </TabControl>
@@ -1146,9 +1192,6 @@
                             <Grid>
                                 <Grid.RowDefinitions>
                                     <RowDefinition></RowDefinition>
-                                    <RowDefinition Style="{StaticResource gridRowHeight}"></RowDefinition>
-                                    <RowDefinition Style="{StaticResource gridRowHeight}"></RowDefinition>
-                                    <RowDefinition Style="{StaticResource gridRowHeight}"></RowDefinition>
                                     <RowDefinition Style="{StaticResource gridRowHeight}"></RowDefinition>
                                     <RowDefinition Style="{StaticResource gridRowHeight}"></RowDefinition>
                                     <RowDefinition Style="{StaticResource gridRowHeight}"></RowDefinition>
@@ -1232,38 +1275,6 @@
                                              Margin="{StaticResource spaceMargin}" />
                                 </DockPanel>
 
-                                <Label Content="{lex:Loc TriggerEffect}" ContentStringFormat="{}{0}:" Grid.Row="8" Grid.Column="0"
-                                       IsEnabled="{Binding SupportsAdaptiveTriggers}"
-                                       ToolTip="Adaptive trigger effects require a physical DualSense controller." />
-
-                                <ComboBox Grid.Row="8" Grid.Column="1" ItemsSource="{Binding Path=TriggerEffectChoices}"
-                                          DisplayMemberPath="DisplayName" SelectedValuePath="Mode" SelectedValue="{Binding L2TriggerEffect}"
-                                          IsEnabled="{Binding SupportsAdaptiveTriggers}"
-                                          ToolTip="Adaptive trigger effects require a physical DualSense controller."
-                                          Margin="{StaticResource spaceMargin}" />
-                                <ComboBox Grid.Row="8" Grid.Column="2" ItemsSource="{Binding Path=TriggerEffectChoices}"
-                                          DisplayMemberPath="DisplayName" SelectedValuePath="Mode" SelectedValue="{Binding R2TriggerEffect}"
-                                          IsEnabled="{Binding SupportsAdaptiveTriggers}"
-                                          ToolTip="Adaptive trigger effects require a physical DualSense controller."
-                                          Margin="{StaticResource spaceMargin}" />
-
-                                <Label Content="Trigger Start:" Grid.Row="9" Grid.Column="0"
-                                       IsEnabled="{Binding SupportsAdaptiveTriggers}" />
-                                <xctk:IntegerUpDown d:IsHidden="True" Value="{Binding L2TriggerEffectStart}" Minimum="0" Maximum="9" Increment="1"
-                                                 Grid.Row="9" Grid.Column="1" IsEnabled="{Binding SupportsAdaptiveTriggers}"
-                                                 Margin="{StaticResource spaceMargin}" />
-                                <xctk:IntegerUpDown d:IsHidden="True" Value="{Binding R2TriggerEffectStart}" Minimum="0" Maximum="9" Increment="1"
-                                                 Grid.Row="9" Grid.Column="2" IsEnabled="{Binding SupportsAdaptiveTriggers}"
-                                                 Margin="{StaticResource spaceMargin}" />
-
-                                <Label Content="Trigger Strength:" Grid.Row="10" Grid.Column="0"
-                                       IsEnabled="{Binding SupportsAdaptiveTriggers}" />
-                                <xctk:IntegerUpDown d:IsHidden="True" Value="{Binding L2TriggerEffectStrength}" Minimum="0" Maximum="255" Increment="1"
-                                                 Grid.Row="10" Grid.Column="1" IsEnabled="{Binding SupportsAdaptiveTriggers}"
-                                                 Margin="{StaticResource spaceMargin}" />
-                                <xctk:IntegerUpDown d:IsHidden="True" Value="{Binding R2TriggerEffectStrength}" Minimum="0" Maximum="255" Increment="1"
-                                                 Grid.Row="10" Grid.Column="2" IsEnabled="{Binding SupportsAdaptiveTriggers}"
-                                                 Margin="{StaticResource spaceMargin}" />
                             </Grid>
                         </GroupBox>
 

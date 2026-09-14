@@ -1,5 +1,10 @@
 # Bindable 360-degree flick-stick calibration
 
+This records the initial implementation in `62c6a6e`. The subsequent
+[Axis Config revision](2026-09-14-axis-calibration-and-trigger-ui.md) replaces
+the remapper UI described below; the runtime and binding compatibility tests
+remain relevant.
+
 Implements [issue #104](https://github.com/hbashton/DS4Windows/issues/104), using
 the existing profile's left/right Real World Calibration rather than a second
 mapping system or separately stored sensitivity. Usage and primary references

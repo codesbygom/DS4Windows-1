@@ -40,6 +40,20 @@ namespace DS4WinWPF.DS4Forms.ViewModels
 {
     public class ProfileSettingsViewModel
     {
+        private static readonly IReadOnlyList<FlickCalibrationTriggerChoice> flickCalibrationTriggerChoices =
+            Array.AsReadOnly(new[]
+            {
+                new FlickCalibrationTriggerChoice(DS4Controls.None, "Not assigned"),
+            }.Concat(SpecialActionTriggerCatalog.Entries
+                // Deliberate button/touch presses keep the test independent of
+                // the stick and gyro movement that the user is calibrating.
+                .Where(entry => entry.Group != "Stick directions" && entry.Group != "Swipe and tilt")
+                .Select(entry => new FlickCalibrationTriggerChoice(entry.Control, entry.Label)))
+                .ToArray());
+
+        public IReadOnlyList<FlickCalibrationTriggerChoice> FlickCalibrationTriggerChoices =>
+            flickCalibrationTriggerChoices;
+
         private List<string> gyroTriggerItems = new List<string>()
         {
             "Cross", "Circle", "Square", "Triangle",
@@ -1851,6 +1865,12 @@ namespace DS4WinWPF.DS4Forms.ViewModels
         }
         public event EventHandler LSOutputIndexChanged;
 
+        public DS4Controls LSFlickCalibrationTrigger
+        {
+            get => Global.LSOutputSettings[device].outputSettings.flickSettings.calibrationTrigger;
+            set => Global.LSOutputSettings[device].outputSettings.flickSettings.calibrationTrigger = value;
+        }
+
         public double LSFlickRWC
         {
             get => Global.LSOutputSettings[device].outputSettings.flickSettings.realWorldCalibration;
@@ -1929,6 +1949,12 @@ namespace DS4WinWPF.DS4Forms.ViewModels
             }
         }
         public event EventHandler RSOutputIndexChanged;
+
+        public DS4Controls RSFlickCalibrationTrigger
+        {
+            get => Global.RSOutputSettings[device].outputSettings.flickSettings.calibrationTrigger;
+            set => Global.RSOutputSettings[device].outputSettings.flickSettings.calibrationTrigger = value;
+        }
 
         public double RSFlickRWC
         {
@@ -2138,93 +2164,6 @@ namespace DS4WinWPF.DS4Forms.ViewModels
         {
             get => Global.R2OutputSettings[device].hipFireMS;
             set => Global.R2OutputSettings[device].hipFireMS = value;
-        }
-
-        private List<TriggerEffectChoice> triggerEffectChoices = new List<TriggerEffectChoice>()
-        {
-            new TriggerEffectChoice("None", DS4Windows.InputDevices.TriggerEffects.None),
-            new TriggerEffectChoice("Full Click", DS4Windows.InputDevices.TriggerEffects.FullClick),
-            new TriggerEffectChoice("Rigid", DS4Windows.InputDevices.TriggerEffects.Rigid),
-            new TriggerEffectChoice("Pulse", DS4Windows.InputDevices.TriggerEffects.Pulse),
-            new TriggerEffectChoice("Gamecube", DS4Windows.InputDevices.TriggerEffects.Gamecube),
-            new TriggerEffectChoice("Soft", DS4Windows.InputDevices.TriggerEffects.Soft),
-            new TriggerEffectChoice("Hard", DS4Windows.InputDevices.TriggerEffects.Hard),
-            new TriggerEffectChoice("Very Hard", DS4Windows.InputDevices.TriggerEffects.VeryHard),
-            new TriggerEffectChoice("Hardest", DS4Windows.InputDevices.TriggerEffects.Hardest),
-            new TriggerEffectChoice("Vibrate", DS4Windows.InputDevices.TriggerEffects.Vibrate),
-            new TriggerEffectChoice("Choppy", DS4Windows.InputDevices.TriggerEffects.Choppy),
-            new TriggerEffectChoice("Medium", DS4Windows.InputDevices.TriggerEffects.Medium),
-            new TriggerEffectChoice("Resistance", DS4Windows.InputDevices.TriggerEffects.Resistance),
-            new TriggerEffectChoice("Bow", DS4Windows.InputDevices.TriggerEffects.Bow),
-            new TriggerEffectChoice("Galloping", DS4Windows.InputDevices.TriggerEffects.Galloping),
-            new TriggerEffectChoice("Semi Auto Gun", DS4Windows.InputDevices.TriggerEffects.SemiAutomaticGun),
-            new TriggerEffectChoice("Auto Gun", DS4Windows.InputDevices.TriggerEffects.AutomaticGun),
-            new TriggerEffectChoice("Machine", DS4Windows.InputDevices.TriggerEffects.Machine),
-        };
-        public List<TriggerEffectChoice> TriggerEffectChoices { get => triggerEffectChoices; }
-
-        public DS4Windows.InputDevices.TriggerEffects L2TriggerEffect
-        {
-            get => Global.L2OutputSettings[device].triggerEffect;
-            set
-            {
-                DS4Windows.InputDevices.TriggerEffects temp = Global.L2OutputSettings[device].TriggerEffect;
-                if (temp == value) return;
-
-                Global.L2OutputSettings[device].TriggerEffect = value;
-            }
-        }
-
-        public DS4Windows.InputDevices.TriggerEffects R2TriggerEffect
-        {
-            get => Global.R2OutputSettings[device].triggerEffect;
-            set
-            {
-                DS4Windows.InputDevices.TriggerEffects temp = Global.R2OutputSettings[device].TriggerEffect;
-                if (temp == value) return;
-
-                Global.R2OutputSettings[device].TriggerEffect = value;
-            }
-        }
-
-        public int L2TriggerEffectStart
-        {
-            get => Global.L2OutputSettings[device].effectSettings.startValue;
-            set
-            {
-                Global.L2OutputSettings[device].effectSettings.startValue = (byte)Math.Clamp(value, 0, 9);
-                Global.L2OutputSettings[device].NotifyTriggerEffectSettingsChanged();
-            }
-        }
-
-        public int R2TriggerEffectStart
-        {
-            get => Global.R2OutputSettings[device].effectSettings.startValue;
-            set
-            {
-                Global.R2OutputSettings[device].effectSettings.startValue = (byte)Math.Clamp(value, 0, 9);
-                Global.R2OutputSettings[device].NotifyTriggerEffectSettingsChanged();
-            }
-        }
-
-        public int L2TriggerEffectStrength
-        {
-            get => Global.L2OutputSettings[device].effectSettings.maxValue;
-            set
-            {
-                Global.L2OutputSettings[device].effectSettings.maxValue = (byte)Math.Clamp(value, 0, 255);
-                Global.L2OutputSettings[device].NotifyTriggerEffectSettingsChanged();
-            }
-        }
-
-        public int R2TriggerEffectStrength
-        {
-            get => Global.R2OutputSettings[device].effectSettings.maxValue;
-            set
-            {
-                Global.R2OutputSettings[device].effectSettings.maxValue = (byte)Math.Clamp(value, 0, 255);
-                Global.R2OutputSettings[device].NotifyTriggerEffectSettingsChanged();
-            }
         }
 
         public double SXDeadZone
@@ -5479,21 +5418,7 @@ namespace DS4WinWPF.DS4Forms.ViewModels
         }
     }
 
-    public class TriggerEffectChoice
-    {
-        private string displayName;
-        public string DisplayName { get => displayName; set => displayName = value; }
-
-
-        private DS4Windows.InputDevices.TriggerEffects mode;
-        public DS4Windows.InputDevices.TriggerEffects Mode { get => mode; set => mode = value; }
-
-        public TriggerEffectChoice(string name, DS4Windows.InputDevices.TriggerEffects mode)
-        {
-            this.displayName = name;
-            this.mode = mode;
-        }
-    }
+    public sealed record FlickCalibrationTriggerChoice(DS4Controls Control, string Label);
 
     public class AudioEndpointChoice
     {

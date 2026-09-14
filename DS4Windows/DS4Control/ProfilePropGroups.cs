@@ -1071,6 +1071,7 @@ namespace DS4Windows
         public double flickTime = DEFAULT_FLICK_TIME; // In seconds
         public double realWorldCalibration = DEFAULT_REAL_WORLD_CALIBRATION;
         public double minAngleThreshold = DEFAULT_MIN_ANGLE_THRESHOLD;
+        public DS4Controls calibrationTrigger = DS4Controls.None;
 
         public double minCutoff = DEFAULT_MINCUTOFF;
         public double beta = DEFAULT_BETA;
@@ -1108,9 +1109,20 @@ namespace DS4Windows
             flickTime = DEFAULT_FLICK_TIME;
             realWorldCalibration = DEFAULT_REAL_WORLD_CALIBRATION;
             minAngleThreshold = DEFAULT_MIN_ANGLE_THRESHOLD;
+            calibrationTrigger = DS4Controls.None;
 
             minCutoff = DEFAULT_MINCUTOFF;
             beta = DEFAULT_BETA;
+        }
+
+        public static DS4Controls ParseCalibrationTrigger(string value)
+        {
+            // Store source-control names, never the unrelated numeric indices
+            // used by gyro activation and shift-trigger selectors.
+            return Enum.TryParse(value, out DS4Controls control) &&
+                Enum.IsDefined(typeof(DS4Controls), control) &&
+                string.Equals(value, control.ToString(), StringComparison.Ordinal)
+                ? control : DS4Controls.None;
         }
 
         public void SetRefreshEvents(OneEuroFilter euroFilter)
