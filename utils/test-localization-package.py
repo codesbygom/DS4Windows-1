@@ -17,6 +17,7 @@ REPOSITORY = Path(__file__).resolve().parent.parent
 REQUIRED = (
     "DS4Windows.exe", "coreclr.dll", "hostfxr.dll",
     "BouncyCastle.Cryptography.dll", "Resources/BouncyCastle.NOTICE.txt",
+    "Resources/DsxTriggerEffects.NOTICE.txt",
     "xbox-one-authorized-persona.json", "extras/XBOX-ONE-PERSONA-NOTICE.md",
     "extras/install-viiper-backend.ps1", "extras/VIIPER-0.1.5-rc4.6-x64.exe",
     "extras/VIIPER-0.1.5-rc4.6-LICENSES.txt", "extras/VIIPER-0.1.5-rc4.6-PROVENANCE.txt",
@@ -39,8 +40,9 @@ VALIDATOR_SPEC.loader.exec_module(VALIDATOR)
 
 
 class LocalizationPackageTests(unittest.TestCase):
-    def test_missing_windows10_cipher_payload_is_rejected_before_composition(self):
-        for missing in ("BouncyCastle.Cryptography.dll", "Resources/BouncyCastle.NOTICE.txt"):
+    def test_missing_cipher_or_required_notice_is_rejected_before_composition(self):
+        for missing in ("BouncyCastle.Cryptography.dll", "Resources/BouncyCastle.NOTICE.txt",
+                        "Resources/DsxTriggerEffects.NOTICE.txt"):
             with self.subTest(missing=missing), tempfile.TemporaryDirectory(prefix="ds4w-missing-cipher-") as temporary:
                 root = Path(temporary)
                 publish = root / "x64" / "Release" / "output"
@@ -63,6 +65,20 @@ class LocalizationPackageTests(unittest.TestCase):
                 self.assertEqual(b"previous published output", (previous / "preserve.txt").read_bytes())
                 self.assertFalse((publish / "DS4Windows.release").exists())
                 self.assertIn(missing, VALIDATOR.REQUIRED_PUBLISH_FILES)
+
+    def test_dsx_effect_notice_is_shipped_with_binary_packages(self):
+        relative = "Resources/DsxTriggerEffects.NOTICE.txt"
+        notice = (REPOSITORY / "DS4Windows" / relative).read_text(encoding="utf-8")
+        self.assertIn('Copyright (c) 2021-2022 John "Nielk1" Klein', notice)
+        self.assertIn("Permission is hereby granted", notice)
+        self.assertIn('THE SOFTWARE IS PROVIDED "AS IS"', notice)
+        project = ET.parse(REPOSITORY / "DS4Windows" / "DS4WinWPF.csproj")
+        entries = [entry for entry in project.findall(".//Content")
+                   if entry.get("Include", "").replace("\\", "/") == relative]
+        self.assertEqual(1, len(entries))
+        self.assertEqual("PreserveNewest", entries[0].findtext("CopyToPublishDirectory"))
+        self.assertIn(relative, REQUIRED)
+        self.assertIn(relative, VALIDATOR.REQUIRED_PUBLISH_FILES)
 
     def test_missing_xbox_persona_is_rejected_before_replacing_package(self):
         with tempfile.TemporaryDirectory(prefix="ds4w-missing-xbox-persona-") as temporary:

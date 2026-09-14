@@ -15,6 +15,7 @@ REQUIRED_PUBLISH_FILES = {
     "DS4Windows.exe",
     "BouncyCastle.Cryptography.dll",
     "Resources/BouncyCastle.NOTICE.txt",
+    "Resources/DsxTriggerEffects.NOTICE.txt",
     "xbox-one-authorized-persona.json",
     "extras/XBOX-ONE-PERSONA-NOTICE.md",
     "DS4Windows.release",

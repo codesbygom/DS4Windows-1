@@ -227,6 +227,10 @@
 			<CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
 			<CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
 		</Content>
+		<Content Include="Resources\DsxTriggerEffects.NOTICE.txt">
+			<CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+			<CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+		</Content>
 		<Content Include="$(PkgYellowDogMan_RRNoise_NET)\runtimes\win-x64\native\rnnoise.dll" Condition="'$(Platform)' == 'x64'">
 			<Link>rnnoise.dll</Link>
 			<CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
