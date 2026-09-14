@@ -858,12 +858,12 @@ namespace DS4WindowsTests
                 "private bool DispatchFeedbackControl");
             string nativeApply = Extract(source,
                 "private bool TryApplyNativeDualSenseOutputReport",
-                "internal static void PrepareNativeDualSenseOutputReportForProfileInto");
+                "internal static byte PrepareNativeDualSenseOutputReportForProfileInto");
             string retainedApply = Extract(source,
                 "internal bool TryApplyRetainedNativeCommand",
                 "private void ApplyFeedback(");
             string buildInto = Extract(source,
-                "internal static void PrepareNativeDualSenseOutputReportForProfileInto",
+                "internal static byte PrepareNativeDualSenseOutputReportForProfileInto",
                 "internal static void CopyPreparedNativeDualSenseStateIntoCombinedCarrier");
 
             int scratch = controlOwner.IndexOf(

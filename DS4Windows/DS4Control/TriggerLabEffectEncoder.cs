@@ -61,9 +61,17 @@ namespace DS4Windows
         {
             if (device == null) return;
             Effect effect = Encode(settings, active);
-            device.PrepareRawTriggerEffect(trigger, effect.Mode, effect.ZoneMaskLow,
-                effect.ZoneMaskHigh, effect.Data0, effect.Data1, effect.Data2,
-                effect.Data3, effect.Frequency);
+            device.PrepareTriggerLabEffect(trigger, effect, active);
+        }
+
+        internal static void ApplyProfileToDevice(DualSenseDevice device, TriggerId trigger,
+            TriggerLabEffectSettings settings, bool persistentEffectActive, bool gameRumbleEnabled)
+        {
+            // Ownership is a profile choice, independent of any future native
+            // packet's rumble magnitude. Ordered native effects stay in their
+            // admitted packets rather than publishing early into this mailbox.
+            device?.PrepareTriggerLabEffect(trigger, Encode(settings, persistentEffectActive),
+                persistentEffectActive || gameRumbleEnabled);
         }
 
         public static TriggerLabEffectSettings CreateGameRumbleVibration(
@@ -82,8 +90,10 @@ namespace DS4Windows
         {
             if (magnitude == 0)
             {
-                ApplyToDevice(device, trigger, template,
-                    persistentEffectActive);
+                // An enabled game-rumble mapping still owns this side at
+                // zero magnitude; its explicit Off must not expose a mod.
+                if (device != null) device.PrepareTriggerLabEffect(trigger,
+                    Encode(template, persistentEffectActive), true);
                 return;
             }
 

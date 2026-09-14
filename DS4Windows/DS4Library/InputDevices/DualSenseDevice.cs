@@ -249,7 +249,7 @@ namespace DS4Windows.InputDevices
             public new const int LY = InputReportDataBytes.LY + REPORT_OFFSET;
         }
 
-        public struct TriggerEffectData
+        public struct TriggerEffectData : IEquatable<TriggerEffectData>
         {
             public byte triggerMotorMode;
             public byte triggerStartResistance;
@@ -259,6 +259,34 @@ namespace DS4Windows.InputDevices
             public byte triggerNearMiddleStrength;
             public byte triggerPressedStrength;
             public byte triggerActuationFrequency;
+            public byte triggerReserved7;
+            public byte triggerReserved8;
+            public byte triggerReserved10;
+
+            // These values participate in every native-state snapshot compare.
+            // Typed equality avoids boxing in nullable/record comparers on the
+            // feedback path, including the opaque native restoration bytes.
+            public readonly bool Equals(TriggerEffectData other) =>
+                triggerMotorMode == other.triggerMotorMode &&
+                triggerStartResistance == other.triggerStartResistance &&
+                triggerEffectForce == other.triggerEffectForce &&
+                triggerRangeForce == other.triggerRangeForce &&
+                triggerNearReleaseStrength == other.triggerNearReleaseStrength &&
+                triggerNearMiddleStrength == other.triggerNearMiddleStrength &&
+                triggerPressedStrength == other.triggerPressedStrength &&
+                triggerActuationFrequency == other.triggerActuationFrequency &&
+                triggerReserved7 == other.triggerReserved7 &&
+                triggerReserved8 == other.triggerReserved8 &&
+                triggerReserved10 == other.triggerReserved10;
+
+            public readonly override bool Equals(object obj) =>
+                obj is TriggerEffectData other && Equals(other);
+
+            public readonly override int GetHashCode() => HashCode.Combine(
+                HashCode.Combine(triggerMotorMode, triggerStartResistance,
+                    triggerEffectForce, triggerRangeForce, triggerNearReleaseStrength,
+                    triggerNearMiddleStrength, triggerPressedStrength, triggerActuationFrequency),
+                triggerReserved7, triggerReserved8, triggerReserved10);
 
             public void ChangeData(TriggerEffects effect, TriggerEffectSettings effectSettings)
             {
@@ -508,6 +536,9 @@ namespace DS4Windows.InputDevices
         private DualSensePhysicalOutputSnapshot activePhysicalOutputState =
             DualSensePhysicalOutputSnapshot.Default;
         private long claimedPhysicalOutputStateVersion;
+        private int pendingDsxReleaseFields;
+        private int preparedDsxReleaseFields;
+        private long preparedDsxReleaseRevision;
         // These one-shot validity bits release profile ownership after an
         // override falls. They belong exclusively to the physical output
         // owner: a failed report retains them for the next retry, and only a
@@ -838,6 +869,11 @@ namespace DS4Windows.InputDevices
         private readonly byte[][] physicalOutputCommandSlots =
             CreateFixedByteBuffers(PhysicalOutputCommandCapacity,
                 USB_OUTPUT_CHANGE_LENGTH);
+        private readonly byte[][] physicalOutputUnderlaySlots =
+            CreateFixedByteBuffers(PhysicalOutputCommandCapacity, USB_OUTPUT_CHANGE_LENGTH);
+        private readonly byte[] physicalOutputUnderlayBuffer = new byte[USB_OUTPUT_CHANGE_LENGTH];
+        private readonly byte[] physicalOutputTriggerLabMasks = new byte[PhysicalOutputCommandCapacity];
+        private byte physicalOutputTriggerLabMask;
         private readonly long[] physicalOutputCommandRevisions =
             new long[PhysicalOutputCommandCapacity];
         private readonly byte[] physicalOutputCommandBuffer =
@@ -3167,6 +3203,8 @@ namespace DS4Windows.InputDevices
                 Interlocked.Exchange(ref physicalOutputQueuedTimestamp, 0);
                 Interlocked.Exchange(ref physicalOutputKeepaliveDueQpc, 0);
                 claimedPhysicalOutputStateVersion = 0;
+                physicalOutputStateMailbox.ClearDsxNativeState();
+                pendingDsxReleaseFields = preparedDsxReleaseFields = 0;
                 activePhysicalOutputState =
                     DualSensePhysicalOutputSnapshot.Default;
                 pendingProfileMuteReleaseStrobes = 0;
@@ -3727,7 +3765,8 @@ namespace DS4Windows.InputDevices
         }
 
         private bool TryQueuePhysicalOutputCommand(byte[] report, int offset,
-            out long nativeOutputRevision)
+            out long nativeOutputRevision, byte[] nativeUnderlay, int nativeUnderlayOffset,
+            byte preparedTriggerLabValidity)
         {
             lock (physicalOutputCommandLock)
             {
@@ -3748,6 +3787,9 @@ namespace DS4Windows.InputDevices
                 Buffer.BlockCopy(report, offset,
                     physicalOutputCommandSlots[tail], 0,
                     USB_OUTPUT_CHANGE_LENGTH);
+                Buffer.BlockCopy(nativeUnderlay ?? report, nativeUnderlay == null ? offset : nativeUnderlayOffset,
+                    physicalOutputUnderlaySlots[tail], 0, USB_OUTPUT_CHANGE_LENGTH);
+                physicalOutputTriggerLabMasks[tail] = preparedTriggerLabValidity;
                 physicalOutputCommandRevisions[tail] =
                     nativeOutputRevision;
                 physicalOutputCommandCount++;
@@ -3787,7 +3829,8 @@ namespace DS4Windows.InputDevices
             }
 
             if (!ProcessRawPhysicalOutputCommand(
-                    physicalOutputCommandBuffer, nativeOutputRevision))
+                    physicalOutputCommandBuffer, nativeOutputRevision,
+                    physicalOutputUnderlayBuffer, physicalOutputTriggerLabMask))
             {
                 return PhysicalOutputCommandProcessResult.Retry;
             }
@@ -3809,6 +3852,9 @@ namespace DS4Windows.InputDevices
                 Buffer.BlockCopy(
                     physicalOutputCommandSlots[physicalOutputCommandHead], 0,
                     destination, 0, USB_OUTPUT_CHANGE_LENGTH);
+                Buffer.BlockCopy(physicalOutputUnderlaySlots[physicalOutputCommandHead], 0,
+                    physicalOutputUnderlayBuffer, 0, USB_OUTPUT_CHANGE_LENGTH);
+                physicalOutputTriggerLabMask = physicalOutputTriggerLabMasks[physicalOutputCommandHead];
                 nativeOutputRevision =
                     physicalOutputCommandRevisions[
                         physicalOutputCommandHead];
@@ -3883,6 +3929,11 @@ namespace DS4Windows.InputDevices
             {
                 bool stopSpeaker = activePhysicalOutputState.
                     EnableSpeakerOutput && !snapshot.EnableSpeakerOutput;
+                // A native feedback callback can present the latest overlay
+                // before this worker claims it. The producer retains release
+                // intent, even for an update/reset between two claims.
+                pendingDsxReleaseFields |= snapshot.DsxReleaseFields;
+                preparedDsxReleaseRevision = snapshot.DsxReleaseRevision;
                 pendingProfileMuteReleaseStrobes |=
                     GetProfileMuteReleaseStrobes(
                         activePhysicalOutputState, snapshot);
@@ -3891,10 +3942,18 @@ namespace DS4Windows.InputDevices
                 DualSensePhysicalOutputSnapshot nextTriggers =
                     snapshot.ForLocalTriggerReport();
                 if (!SameLocalTriggerEffect(previousTriggers.LeftTrigger,
-                        nextTriggers.LeftTrigger))
+                        nextTriggers.LeftTrigger) ||
+                    (!snapshot.LeftTriggerLabActive &&
+                        (activePhysicalOutputState.DsxOverlay.Left.HasValue != snapshot.DsxOverlay.Left.HasValue ||
+                         snapshot.DsxOverlay.Left.HasValue && !ReferenceEquals(activePhysicalOutputState.DsxOverlay.Owner, snapshot.DsxOverlay.Owner))) ||
+                    activePhysicalOutputState.LeftTriggerLabActive != snapshot.LeftTriggerLabActive)
                     preparedLocalLeftTriggerGeneration++;
                 if (!SameLocalTriggerEffect(previousTriggers.RightTrigger,
-                        nextTriggers.RightTrigger))
+                        nextTriggers.RightTrigger) ||
+                    (!snapshot.RightTriggerLabActive &&
+                        (activePhysicalOutputState.DsxOverlay.Right.HasValue != snapshot.DsxOverlay.Right.HasValue ||
+                         snapshot.DsxOverlay.Right.HasValue && !ReferenceEquals(activePhysicalOutputState.DsxOverlay.Owner, snapshot.DsxOverlay.Owner))) ||
+                    activePhysicalOutputState.RightTriggerLabActive != snapshot.RightTriggerLabActive)
                     preparedLocalRightTriggerGeneration++;
                 activePhysicalOutputState = snapshot;
 
@@ -3937,6 +3996,7 @@ namespace DS4Windows.InputDevices
 
             preparedProfileMuteReleaseStrobes =
                 pendingProfileMuteReleaseStrobes;
+            Volatile.Write(ref preparedDsxReleaseFields, pendingDsxReleaseFields);
         }
 
         private void ApplyPendingNativeGameLedOwnershipRelease()
@@ -4064,6 +4124,7 @@ namespace DS4Windows.InputDevices
 
         private void ApplyNativeGameOutputReleaseOnPhysicalOwner()
         {
+            physicalOutputStateMailbox.ClearDsxNativeState();
             ClearPendingBluetoothNativeGameTransition();
             latestUsbNativeGameOutputRevision = 0;
             latestUsbNativeGameOutputAvailable = false;
@@ -4101,7 +4162,7 @@ namespace DS4Windows.InputDevices
         }
 
         private bool ProcessRawPhysicalOutputCommand(byte[] report,
-            long nativeOutputRevision)
+            long nativeOutputRevision, byte[] nativeUnderlay, byte preparedTriggerLabValidity)
         {
             if (conType == ConnectionType.BT)
             {
@@ -4142,14 +4203,16 @@ namespace DS4Windows.InputDevices
 
                     bool published =
                         TryPublishAtomicNativeGameStateTransition(
-                            nativeOutputRevision, hapticsGeneration);
+                            nativeOutputRevision, hapticsGeneration, nativeUnderlay, 1, preparedTriggerLabValidity);
                     // A failed immediate publish has copied the exact and
                     // quiescent pair into a fixed transaction before this
                     // FIFO head is committed. Mutable cache admission alone
                     // is deliberately not considered durable.
-                    return published ||
+                    bool admitted = published ||
                         pendingBluetoothNativeGameRevision ==
                             nativeOutputRevision;
+                    if (admitted) physicalOutputStateMailbox.ObserveDsxNativeState(nativeUnderlay, 1);
+                    return admitted;
                 }
             }
 
@@ -4162,6 +4225,7 @@ namespace DS4Windows.InputDevices
                 1);
             DualSensePhysicalOutputSnapshot outputState =
                 physicalOutputStateMailbox.ReadLatest();
+            outputState = outputState with { DsxNativeState = outputState.DsxNativeState.ObserveNative(nativeUnderlay, 1) };
             if (ledOwnershipUpdate != 0)
             {
                 // Compose against the state this command will establish, but
@@ -4176,7 +4240,7 @@ namespace DS4Windows.InputDevices
             }
 
             PrepareUsbNativeGameReportWithLocalOverridesInto(
-                report, outputReport, outputState);
+                report, outputReport, outputState, preparedTriggerLabValidity: preparedTriggerLabValidity);
             Func<byte[], bool> testWrite =
                 PhysicalRawOutputWriteTestHook;
             bool written = testWrite != null ?
@@ -4198,6 +4262,7 @@ namespace DS4Windows.InputDevices
             // but consume one-shot command strobes first so a profile update
             // cannot retrigger adaptive effects or LED release. Continuous
             // motor mode/strength remain intact until the next native packet.
+            physicalOutputStateMailbox.ObserveDsxNativeState(nativeUnderlay, 1);
             Buffer.BlockCopy(report, 0, latestUsbNativeGameOutputReport, 0,
                 USB_OUTPUT_CHANGE_LENGTH);
             ConsumeNativeGameStateValidity(
@@ -5752,6 +5817,12 @@ namespace DS4Windows.InputDevices
                         outputReport, 1, outputState,
                         preparedProfileMuteReleaseStrobes);
                 }
+                // A held mod is not a new command on every light/audio edit.
+                // Its changed generation (or explicit release) owns the strobe.
+                outputReport[1] &= (byte)~GetDsxTriggerValidity(outputState.DsxOverlay.Fields);
+                ApplyDsxOverlayToNativeReport(outputReport, 1, outputState,
+                    preparedDsxReleaseFields, (byte)(GetPreparedLocalTriggerValidity() |
+                        GetDsxTriggerValidity(preparedDsxReleaseFields)));
 
                 if (currentHap.dirty || !previousHapticState.Equals(currentHap))
                 {
@@ -6010,20 +6081,24 @@ namespace DS4Windows.InputDevices
         }
 
         internal bool WriteRawOutputReportFromGame(byte[] report, int offset,
-            int length, out long nativeOutputRevision)
+            int length, out long nativeOutputRevision, byte[] nativeUnderlay = null, int nativeUnderlayOffset = 0,
+            byte preparedTriggerLabValidity = 0)
         {
             nativeOutputRevision = 0;
             if (report == null ||
                 length < USB_OUTPUT_CHANGE_LENGTH ||
                 offset < 0 ||
                 offset + USB_OUTPUT_CHANGE_LENGTH > report.Length ||
-                report[offset] != OUTPUT_REPORT_ID_USB)
+                report[offset] != OUTPUT_REPORT_ID_USB ||
+                (nativeUnderlay != null && (nativeUnderlayOffset < 0 ||
+                    nativeUnderlayOffset + USB_OUTPUT_CHANGE_LENGTH > nativeUnderlay.Length ||
+                    nativeUnderlay[nativeUnderlayOffset] != OUTPUT_REPORT_ID_USB)))
             {
                 return false;
             }
 
             return TryQueuePhysicalOutputCommand(report, offset,
-                out nativeOutputRevision);
+                out nativeOutputRevision, nativeUnderlay, nativeUnderlayOffset, preparedTriggerLabValidity);
         }
 
         internal bool RequestNativeGameLedOwnershipRelease(
@@ -6049,6 +6124,7 @@ namespace DS4Windows.InputDevices
 
         internal void ReleaseNativeGameOutputOwnership()
         {
+            physicalOutputStateMailbox.ClearDsxNativeState();
             Interlocked.Exchange(ref pendingNativeGameLedReleaseRevision, 0);
             physicalOutputStateMailbox.
                 SetNativeGameLightbarOwnershipReleased(true);
@@ -6129,7 +6205,8 @@ namespace DS4Windows.InputDevices
 
         internal bool WriteBluetoothCombinedHapticsAudioOutputReport(
             byte[] report, int offset, int length, bool hasNativeGameState,
-            out long nativeOutputRevision)
+            out long nativeOutputRevision, byte[] nativeUnderlay = null, int nativeUnderlayOffset = 0,
+            byte preparedTriggerLabValidity = 0)
         {
             nativeOutputRevision = 0;
             if (report == null || offset < 0 || length != BluetoothCombinedOutputReportLength ||
@@ -6138,7 +6215,10 @@ namespace DS4Windows.InputDevices
                 report[offset + 12] != BluetoothCombinedStateLength ||
                 report[offset + BluetoothCombinedHapticsOffset] != 0x92 ||
                 report[offset + BluetoothCombinedHapticsOffset + 1] !=
-                    BluetoothCombinedHapticsDataLength)
+                    BluetoothCombinedHapticsDataLength ||
+                (nativeUnderlay != null && (nativeUnderlayOffset < 0 ||
+                    nativeUnderlayOffset + USB_OUTPUT_CHANGE_LENGTH > nativeUnderlay.Length ||
+                    nativeUnderlay[nativeUnderlayOffset] != OUTPUT_REPORT_ID_USB)))
             {
                 LastBluetoothHapticsWriteStatus =
                     "Rejected: invalid combined Bluetooth haptics/audio report.";
@@ -6181,7 +6261,12 @@ namespace DS4Windows.InputDevices
                     bool published =
                         TryPublishAtomicNativeGameStateTransition(
                             nativeOutputRevision,
-                            nativeHapticsGeneration);
+                            nativeHapticsGeneration, nativeUnderlay ?? report,
+                            nativeUnderlay == null ? offset + BluetoothCombinedStateOffset : nativeUnderlayOffset + 1,
+                            preparedTriggerLabValidity);
+                    if (published || pendingBluetoothNativeGameRevision == nativeOutputRevision)
+                        physicalOutputStateMailbox.ObserveDsxNativeState(nativeUnderlay ?? report,
+                            nativeUnderlay == null ? offset + BluetoothCombinedStateOffset : nativeUnderlayOffset + 1);
                     if (published)
                     {
                         MarkBluetoothCombinedHapticsSubmitted(
@@ -6218,10 +6303,13 @@ namespace DS4Windows.InputDevices
         }
 
         private bool TryPublishAtomicNativeGameStateTransition(
-            long nativeOutputRevision, long hapticsGeneration)
+            long nativeOutputRevision, long hapticsGeneration, byte[] nativeUnderlay = null, int nativeUnderlayStateOffset = 0,
+            byte preparedTriggerLabValidity = 0)
         {
             DualSensePhysicalOutputSnapshot outputState =
                 physicalOutputStateMailbox.ReadLatest();
+            if (nativeUnderlay != null)
+                outputState = outputState with { DsxNativeState = outputState.DsxNativeState.ObserveNative(nativeUnderlay, nativeUnderlayStateOffset) };
             byte[] exactState = bluetoothCombinedGameStateWorkingReport;
             byte[] quiescentTemplate =
                 bluetoothCombinedSpeakerWorkingReport;
@@ -6245,7 +6333,8 @@ namespace DS4Windows.InputDevices
                 outputState.SpeakerVolume, outputState.HeadsetOnlyAudio,
                 outputState.HeadphoneVolume);
             ApplyBluetoothMicrophoneStreamingRequest(exactState,
-                outputState);
+                outputState, 0, preserveTriggerValidity: true,
+                preparedTriggerLabValidity: preparedTriggerLabValidity);
             ApplyBluetoothSpeakerVolumeAndRoutingCore(quiescentTemplate,
                 outputState.SpeakerVolume, outputState.HeadsetOnlyAudio,
                 outputState.HeadphoneVolume);
@@ -6626,7 +6715,7 @@ namespace DS4Windows.InputDevices
                 {
                     published = bluetoothCacheAdmitted;
                     if (published &&
-                        preparedProfileMuteReleaseStrobes != 0)
+                        (preparedProfileMuteReleaseStrobes != 0 || preparedDsxReleaseFields != 0))
                     {
                         // A template admission is not physical proof. Route a
                         // falling-edge release through the ordered completion
@@ -6642,7 +6731,8 @@ namespace DS4Windows.InputDevices
                                 allowDuringStopping: false,
                                 outputState: activePhysicalOutputState,
                                 profileMuteReleaseStrobes:
-                                    preparedProfileMuteReleaseStrobes);
+                                    preparedProfileMuteReleaseStrobes,
+                                dsxReleaseFields: preparedDsxReleaseFields);
                     }
                     else if (published)
                     {
@@ -6678,6 +6768,14 @@ namespace DS4Windows.InputDevices
                         preparedProfileMuteReleaseStrobes,
                         published: true);
                 preparedProfileMuteReleaseStrobes = 0;
+                pendingDsxReleaseFields &= ~preparedDsxReleaseFields;
+                physicalOutputStateMailbox.AcknowledgeDsxRelease(preparedDsxReleaseRevision, preparedDsxReleaseFields);
+                Volatile.Write(ref preparedDsxReleaseFields, 0);
+                if (conType == ConnectionType.USB)
+                {
+                    submittedLocalLeftTriggerGeneration = preparedLocalLeftTriggerGeneration;
+                    submittedLocalRightTriggerGeneration = preparedLocalRightTriggerGeneration;
+                }
 
                 previousHapticState = currentHap;
                 submittedLocalRumbleGeneration =
@@ -7164,7 +7262,8 @@ namespace DS4Windows.InputDevices
             bool includeNativeHaptics, string reportDescription,
             bool waitForCompletion, bool allowDuringStopping,
             in DualSensePhysicalOutputSnapshot outputState,
-            byte profileMuteReleaseStrobes = 0)
+            byte profileMuteReleaseStrobes = 0,
+            int dsxReleaseFields = 0)
         {
             if (!allowDuringStopping &&
                 Volatile.Read(ref bluetoothOutputTransportStopping) != 0)
@@ -7270,6 +7369,14 @@ namespace DS4Windows.InputDevices
 
                     ApplyBluetoothMicrophoneStreamingRequest(combined,
                         outputState, profileMuteReleaseStrobes);
+                    // Native/DSX/Trigger Lab B may already have been presented
+                    // after this worker claimed release A. Resolve only A's
+                    // released fields at the ordered boundary; do not replace
+                    // unrelated claimed changes or consume B's generation.
+                    if (dsxReleaseFields != 0)
+                        ApplyDsxReleaseAtOrderedBoundary(combined,
+                            BluetoothCombinedStateOffset,
+                            physicalOutputStateMailbox.ReadLatest(), dsxReleaseFields);
                     lock (bluetoothCombinedSpeakerReportLock)
                     {
                         reportSequenceBefore =
@@ -7637,7 +7744,8 @@ namespace DS4Windows.InputDevices
 
         private void ApplyBluetoothMicrophoneStreamingRequest(byte[] report,
             in DualSensePhysicalOutputSnapshot outputState,
-            byte profileMuteReleaseStrobes)
+            byte profileMuteReleaseStrobes,
+            bool preserveTriggerValidity = false, int preparedTriggerLabValidity = -1)
         {
             // The combined Bluetooth writer can be carrying game-owned native
             // state while the profile owns the physical mute button. Overlay
@@ -7649,6 +7757,13 @@ namespace DS4Windows.InputDevices
             ApplyProfileMuteReleaseStrobesToNativeReport(report,
                 BluetoothCombinedStateOffset, outputState,
                 profileMuteReleaseStrobes);
+            // Only an exact native command carries its authored trigger
+            // strobes. Keepalives/audio templates are quiescent; local trigger
+            // changes have a separate generation-owned command lane.
+            if (!preserveTriggerValidity)
+                report[BluetoothCombinedStateOffset] &= unchecked((byte)~0x0C);
+            ApplyDsxOverlayToNativeReport(report, BluetoothCombinedStateOffset,
+                outputState, preparedTriggerLabValidity: preparedTriggerLabValidity);
 
             bool enabled =
                 Volatile.Read(ref bluetoothMicrophoneStreamingRequested) != 0;
@@ -7673,48 +7788,133 @@ namespace DS4Windows.InputDevices
         }
 
         private static bool SameLocalTriggerEffect(in TriggerEffectData left,
-            in TriggerEffectData right) =>
-            left.triggerMotorMode == right.triggerMotorMode &&
-            left.triggerStartResistance == right.triggerStartResistance &&
-            left.triggerEffectForce == right.triggerEffectForce &&
-            left.triggerRangeForce == right.triggerRangeForce &&
-            left.triggerNearReleaseStrength == right.triggerNearReleaseStrength &&
-            left.triggerNearMiddleStrength == right.triggerNearMiddleStrength &&
-            left.triggerPressedStrength == right.triggerPressedStrength &&
-            left.triggerActuationFrequency == right.triggerActuationFrequency;
+            in TriggerEffectData right) => left.Equals(right);
+
+        private byte GetPreparedLocalTriggerValidity() => (byte)(
+            (preparedLocalRightTriggerGeneration != submittedLocalRightTriggerGeneration ? 0x04 : 0) |
+            (preparedLocalLeftTriggerGeneration != submittedLocalLeftTriggerGeneration ? 0x08 : 0));
+
+        internal static byte GetDsxTriggerValidity(int fields) => (byte)(
+            ((fields & DualSenseDsxOverlay.RightField) != 0 ? 0x04 : 0) |
+            ((fields & DualSenseDsxOverlay.LeftField) != 0 ? 0x08 : 0));
+
+        internal static byte GetCurrentLocalTriggerValidity(byte pendingValidity, int releasedFields,
+            in DualSensePhysicalOutputSnapshot claimed, in DualSensePhysicalOutputSnapshot latest)
+        {
+            byte result = pendingValidity;
+            var claimedLocal = claimed.ForLocalTriggerReport();
+            var latestLocal = latest.ForLocalTriggerReport();
+            if (!LocalTriggerClaimIsCurrent(claimed.LeftTriggerLabActive, latest.LeftTriggerLabActive,
+                    claimed.DsxOverlay.Left.HasValue, latest.DsxOverlay.Left.HasValue,
+                    claimed.DsxOverlay.Owner, latest.DsxOverlay.Owner,
+                    claimedLocal.LeftTrigger, latestLocal.LeftTrigger) ||
+                (releasedFields & DualSenseDsxOverlay.LeftField) != 0 &&
+                    !latest.LeftTriggerLabActive && !latest.DsxOverlay.Left.HasValue)
+                result &= unchecked((byte)~0x08);
+            if (!LocalTriggerClaimIsCurrent(claimed.RightTriggerLabActive, latest.RightTriggerLabActive,
+                    claimed.DsxOverlay.Right.HasValue, latest.DsxOverlay.Right.HasValue,
+                    claimed.DsxOverlay.Owner, latest.DsxOverlay.Owner,
+                    claimedLocal.RightTrigger, latestLocal.RightTrigger) ||
+                (releasedFields & DualSenseDsxOverlay.RightField) != 0 &&
+                    !latest.RightTriggerLabActive && !latest.DsxOverlay.Right.HasValue)
+                result &= unchecked((byte)~0x04);
+            return result;
+        }
+
+        private static bool LocalTriggerClaimIsCurrent(bool claimedTriggerLab, bool latestTriggerLab,
+            bool claimedDsx, bool latestDsx, object claimedOwner, object latestOwner,
+            in TriggerEffectData claimed, in TriggerEffectData latest) =>
+            claimedTriggerLab == latestTriggerLab &&
+            (latestTriggerLab || claimedDsx == latestDsx &&
+                (!latestDsx || ReferenceEquals(claimedOwner, latestOwner))) &&
+            SameLocalTriggerEffect(claimed, latest);
+
+        internal static void ApplyDsxReleaseAtOrderedBoundary(byte[] report, int stateOffset,
+            in DualSensePhysicalOutputSnapshot latest, int releasedFields)
+        {
+            // The surrounding report retains the claimed profile/audio state.
+            // Only released fields consult current priority, including newer
+            // owners that may already have reached the device via native output.
+            DualSenseDsxOverlay overlay = latest.DsxOverlay;
+            byte selectedTriggers = GetDsxTriggerValidity(releasedFields);
+            byte currentlyOwnedTriggers = (byte)(GetDsxTriggerValidity(overlay.Fields) |
+                (latest.LeftTriggerLabActive ? 0x08 : 0) |
+                (latest.RightTriggerLabActive ? 0x04 : 0));
+            var selected = latest with
+            {
+                DsxOverlay = new DualSenseDsxOverlay(overlay.Owner,
+                    (releasedFields & DualSenseDsxOverlay.LeftField) != 0 ? overlay.Left : null,
+                    (releasedFields & DualSenseDsxOverlay.RightField) != 0 ? overlay.Right : null,
+                    (releasedFields & DualSenseDsxOverlay.ColorField) != 0 ? overlay.Color : null,
+                    (releasedFields & DualSenseDsxOverlay.MicField) != 0 ? overlay.MicLed : null,
+                    (releasedFields & DualSenseDsxOverlay.PlayerField) != 0 ? overlay.PlayerLeds : null),
+                LeftTriggerLabActive = (releasedFields & DualSenseDsxOverlay.LeftField) != 0 && latest.LeftTriggerLabActive,
+                RightTriggerLabActive = (releasedFields & DualSenseDsxOverlay.RightField) != 0 && latest.RightTriggerLabActive,
+            };
+            // A new owner supplies its own local generation. Do not replay it
+            // or cancel it as part of its predecessor's completed release.
+            report[stateOffset] &= (byte)~(selectedTriggers & currentlyOwnedTriggers);
+            ApplyDsxOverlayToNativeReport(report, stateOffset, selected, releasedFields,
+                (byte)(selectedTriggers & ~currentlyOwnedTriggers));
+        }
 
         private bool TryPublishPreparedLocalTriggerState()
         {
-            byte validity = 0;
-            if (preparedLocalRightTriggerGeneration != submittedLocalRightTriggerGeneration)
-                validity |= 0x04;
-            if (preparedLocalLeftTriggerGeneration != submittedLocalLeftTriggerGeneration)
-                validity |= 0x08;
-            if (validity == 0) return true;
-            if (!TryClaimBluetoothAudioPacer(out DualSenseBluetoothAudioPacer pacer,
-                    out _)) return false;
-            try
+            // Match the native command admission order. The pacer operation
+            // below only copies to its bounded queue; no IPC/HID or completion
+            // wait is performed while this short ordering lock is held.
+            lock (bluetoothCombinedTransportWriteLock)
             {
-                // A local trigger edit is an explicit state command. Media
-                // templates consume trigger validity, and the native cache
-                // deliberately preserves the game's state on unrelated edits.
-                // Send only the changed sides through the helper's local lane.
-                // Its native FIFO orders this command and handles later game
-                // ownership; no cached rumble, LED, or opposite trigger is replayed.
-                Array.Clear(localTriggerStateReport);
-                localTriggerStateReport[BluetoothCombinedStateOffset] = validity;
-                if ((validity & 0x04) != 0)
-                    Buffer.BlockCopy(outputReport, 12, localTriggerStateReport,
-                        BluetoothCombinedStateOffset + 10, 11);
-                if ((validity & 0x08) != 0)
-                    Buffer.BlockCopy(outputReport, 23, localTriggerStateReport,
-                        BluetoothCombinedStateOffset + 21, 11);
-                if (!pacer.UpdateControllerState(localTriggerStateReport)) return false;
-                submittedLocalLeftTriggerGeneration = preparedLocalLeftTriggerGeneration;
-                submittedLocalRightTriggerGeneration = preparedLocalRightTriggerGeneration;
-                return true;
+                // Ordered release already restored these sides against the newest
+                // admitted native state. Do not follow it with the older claimed
+                // local report, but retain unrelated Trigger Lab/local changes.
+                byte pendingValidity = GetPreparedLocalTriggerValidity();
+                byte validity = GetCurrentLocalTriggerValidity(pendingValidity,
+                    preparedDsxReleaseFields, activePhysicalOutputState,
+                    physicalOutputStateMailbox.ReadLatest());
+                byte superseded = (byte)(pendingValidity & ~validity);
+                if ((superseded & 0x04) != 0)
+                    submittedLocalRightTriggerGeneration = preparedLocalRightTriggerGeneration;
+                if ((superseded & 0x08) != 0)
+                    submittedLocalLeftTriggerGeneration = preparedLocalLeftTriggerGeneration;
+                // This method is reached only after the ordered release completed.
+                // A failure on an unrelated local side must not replay that release
+                // while retrying its independent command.
+                pendingDsxReleaseFields &= ~preparedDsxReleaseFields;
+                physicalOutputStateMailbox.AcknowledgeDsxRelease(
+                    preparedDsxReleaseRevision, preparedDsxReleaseFields);
+                Volatile.Write(ref preparedDsxReleaseFields, 0);
+                if (validity == 0) return true;
+                if (!TryPublishPendingBluetoothNativeGameTransition()) return false;
+                if (!TryClaimBluetoothAudioPacer(out DualSenseBluetoothAudioPacer pacer,
+                        out _)) return false;
+                try
+                {
+                    // A local trigger edit is an explicit state command. Media
+                    // templates consume trigger validity, and the native cache
+                    // deliberately preserves the game's state on unrelated edits.
+                    // Send only the changed sides through the helper's local lane.
+                    // Its native FIFO orders this command and handles later game
+                    // ownership; no cached rumble, LED, or opposite trigger is replayed.
+                    Array.Clear(localTriggerStateReport);
+                    localTriggerStateReport[BluetoothCombinedStateOffset] = validity;
+                    if ((validity & 0x04) != 0)
+                        Buffer.BlockCopy(outputReport, 12, localTriggerStateReport,
+                            BluetoothCombinedStateOffset + 10, 11);
+                    if ((validity & 0x08) != 0)
+                        Buffer.BlockCopy(outputReport, 23, localTriggerStateReport,
+                            BluetoothCombinedStateOffset + 21, 11);
+                    ApplyDsxOverlayToNativeReport(localTriggerStateReport, BluetoothCombinedStateOffset,
+                        activePhysicalOutputState);
+                    localTriggerStateReport[BluetoothCombinedStateOffset] &= validity;
+                    localTriggerStateReport[BluetoothCombinedStateOffset + 1] = 0;
+                    if (!pacer.UpdateControllerState(localTriggerStateReport)) return false;
+                    submittedLocalLeftTriggerGeneration = preparedLocalLeftTriggerGeneration;
+                    submittedLocalRightTriggerGeneration = preparedLocalRightTriggerGeneration;
+                    return true;
+                }
+                finally { ReleaseBluetoothAudioPacerClaim(); }
             }
-            finally { ReleaseBluetoothAudioPacerClaim(); }
         }
 
         internal static void ApplyProfileMuteButtonStateToNativeReport(
@@ -7807,7 +8007,7 @@ namespace DS4Windows.InputDevices
         internal static void PrepareUsbNativeGameReportWithLocalOverridesInto(
             byte[] nativeReport, byte[] destination,
             in DualSensePhysicalOutputSnapshot outputState,
-            byte profileMuteReleaseStrobes = 0)
+            byte profileMuteReleaseStrobes = 0, int preparedTriggerLabValidity = -1)
         {
             if (nativeReport == null ||
                 nativeReport.Length < USB_OUTPUT_CHANGE_LENGTH ||
@@ -7831,6 +8031,83 @@ namespace DS4Windows.InputDevices
             {
                 MergeProfileLightbarIntoV5AudioSnapshot(outputState,
                     destination, 1);
+            }
+            ApplyDsxOverlayToNativeReport(destination, 1, outputState,
+                preparedTriggerLabValidity: preparedTriggerLabValidity);
+        }
+
+        internal static void ApplyDsxOverlayToNativeReport(byte[] report, int stateOffset,
+            in DualSensePhysicalOutputSnapshot outputState, int releasedFields = 0,
+            byte additionalTriggerValidity = 0, int preparedTriggerLabValidity = -1)
+        {
+            if (report == null || stateOffset < 0 || stateOffset + 47 > report.Length)
+                throw new ArgumentException("A complete native state is required.");
+            // Native packets are validity-masked deltas, not full snapshots.
+            // Replace only their authored trigger commands. Explicit local
+            // generations/releases may add a strobe once via this argument;
+            // a pending release in the mailbox is not itself authorization.
+            byte triggerValidity = (byte)((report[stateOffset] | additionalTriggerValidity) & 0x0C);
+            DualSenseDsxOverlay overlay = outputState.DsxOverlay;
+            DualSenseDsxOverlay native = outputState.DsxNativeState;
+            DualSensePhysicalOutputSnapshot local = outputState.ForLocalTriggerReport();
+            // An admitted native command already owns its prepared Trigger Lab
+            // blocks. Reading a later packet's live effect here would rewrite
+            // ordered A into B, even when B failed queue admission. Local
+            // generations use the current snapshot; native transitions use the
+            // side ownership captured with their immutable prepared bytes.
+            bool preserveLeft = preparedTriggerLabValidity >= 0 && (preparedTriggerLabValidity & 0x08) != 0;
+            bool preserveRight = preparedTriggerLabValidity >= 0 && (preparedTriggerLabValidity & 0x04) != 0;
+            TriggerEffectData? left = preparedTriggerLabValidity < 0 && outputState.LeftTriggerLabActive
+                ? local.LeftTrigger : overlay.Left;
+            TriggerEffectData? right = preparedTriggerLabValidity < 0 && outputState.RightTriggerLabActive
+                ? local.RightTrigger : overlay.Right;
+            if (!left.HasValue && (releasedFields & DualSenseDsxOverlay.LeftField) != 0)
+                left = outputState.LeftTriggerLabActive ? local.LeftTrigger : native.Left ?? local.LeftTrigger;
+            if (!right.HasValue && (releasedFields & DualSenseDsxOverlay.RightField) != 0)
+                right = outputState.RightTriggerLabActive ? local.RightTrigger : native.Right ?? local.RightTrigger;
+            if (!left.HasValue && (additionalTriggerValidity & 0x08) != 0)
+                left = local.LeftTrigger;
+            if (!right.HasValue && (additionalTriggerValidity & 0x04) != 0)
+                right = local.RightTrigger;
+            if (!preserveLeft && left.HasValue && (triggerValidity & 0x08) != 0)
+            {
+                report[stateOffset] |= 0x08;
+                DualSenseDsxOverlay.WriteTrigger(report, stateOffset + 21, left.Value);
+            }
+            if (!preserveRight && right.HasValue && (triggerValidity & 0x04) != 0)
+            {
+                report[stateOffset] |= 0x04;
+                DualSenseDsxOverlay.WriteTrigger(report, stateOffset + 10, right.Value);
+            }
+            DS4Color? color = overlay.Color;
+            if (!color.HasValue && (releasedFields & DualSenseDsxOverlay.ColorField) != 0)
+                color = !outputState.NativeGameLightbarOwnershipReleased && native.Color.HasValue
+                    ? native.Color : outputState.ProfileLightbar.LightBarColor;
+            if (color.HasValue)
+            {
+                report[stateOffset + 1] = (byte)((report[stateOffset + 1] & ~0x08) | 0x04);
+                report[stateOffset + 44] = color.Value.red;
+                report[stateOffset + 45] = color.Value.green;
+                report[stateOffset + 46] = color.Value.blue;
+            }
+            byte? player = overlay.PlayerLeds;
+            if (!player.HasValue && (releasedFields & DualSenseDsxOverlay.PlayerField) != 0)
+                player = !outputState.NativeGameLightbarOwnershipReleased && native.PlayerLeds.HasValue
+                    ? native.PlayerLeds : outputState.ActivePlayerLedMask;
+            if (player.HasValue)
+            {
+                report[stateOffset + 1] = (byte)((report[stateOffset + 1] & ~0x08) | 0x10);
+                report[stateOffset + 43] = player.Value;
+            }
+            byte? mic = overlay.MicLed;
+            if (!mic.HasValue && (releasedFields & DualSenseDsxOverlay.MicField) != 0)
+                mic = outputState.MuteLedOverride ? (outputState.MuteLedOn ? (byte)1 : (byte)0) :
+                    outputState.MicrophoneMuteOverride ? (outputState.MicrophoneMuted ? (byte)1 : (byte)0) :
+                    native.MicLed ?? outputState.MuteLedByte;
+            if (mic.HasValue)
+            {
+                report[stateOffset + 1] |= 0x01;
+                report[stateOffset + 8] = mic.Value;
             }
         }
 
@@ -8141,7 +8418,7 @@ namespace DS4Windows.InputDevices
 
             TriggerEffectData triggerState = default;
             triggerState.ChangeData(effect, effectSettings);
-            if (physicalOutputStateMailbox.SetTrigger(trigger, triggerState))
+            if (physicalOutputStateMailbox.SetTriggerLabTrigger(trigger, triggerState, false))
             {
                 QueuePhysicalOutputUpdate();
             }
@@ -8173,6 +8450,27 @@ namespace DS4Windows.InputDevices
             bool accepted = physicalOutputStateMailbox.TrySetXboxImpulse(owner, left, right, out bool changed);
             if (changed) QueuePhysicalOutputUpdate();
             return accepted;
+        }
+
+        internal bool TryUpdateDsxOverlay(object owner, Func<DualSenseDsxOverlay, DualSenseDsxOverlay> update)
+        {
+            bool accepted = physicalOutputStateMailbox.TryUpdateDsxOverlay(owner, update, out bool changed);
+            if (changed) QueuePhysicalOutputUpdate();
+            return accepted;
+        }
+
+        internal void ReleaseDsxOverlay(object owner)
+        {
+            physicalOutputStateMailbox.ReleaseDsxOverlay(owner, out bool changed);
+            if (changed) QueuePhysicalOutputUpdate();
+        }
+
+        internal void PrepareTriggerLabEffect(TriggerId trigger, TriggerLabEffectEncoder.Effect effect, bool active)
+        {
+            TriggerEffectData value = default;
+            value.ChangeRaw(effect.Mode, effect.ZoneMaskLow, effect.ZoneMaskHigh, effect.Data0,
+                effect.Data1, effect.Data2, effect.Data3, effect.Frequency);
+            if (physicalOutputStateMailbox.SetTriggerLabTrigger(trigger, value, active)) QueuePhysicalOutputUpdate();
         }
 
         private byte DeviceBatteryLinearMask(int deviceBattery)

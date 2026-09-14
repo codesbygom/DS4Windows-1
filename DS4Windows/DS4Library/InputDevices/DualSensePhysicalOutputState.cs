@@ -51,11 +51,19 @@ namespace DS4Windows.InputDevices
         internal object XboxImpulseOwner { get; init; }
         internal byte LeftXboxImpulse { get; init; }
         internal byte RightXboxImpulse { get; init; }
+        internal DualSenseDsxOverlay DsxOverlay { get; init; }
+        internal DualSenseDsxOverlay DsxNativeState { get; init; }
+        internal bool LeftTriggerLabActive { get; init; }
+        internal bool RightTriggerLabActive { get; init; }
+        internal int DsxReleaseFields { get; init; }
+        internal long DsxReleaseRevision { get; init; }
 
         internal DualSensePhysicalOutputSnapshot ForLocalTriggerReport() => this with
         {
-            LeftTrigger = LeftXboxImpulse == 0 ? LeftTrigger : XboxImpulseTriggerEffect.Encode(LeftXboxImpulse),
-            RightTrigger = RightXboxImpulse == 0 ? RightTrigger : XboxImpulseTriggerEffect.Encode(RightXboxImpulse),
+            LeftTrigger = LeftTriggerLabActive ? LeftTrigger : DsxOverlay.Left ??
+                (LeftXboxImpulse == 0 ? LeftTrigger : XboxImpulseTriggerEffect.Encode(LeftXboxImpulse)),
+            RightTrigger = RightTriggerLabActive ? RightTrigger : DsxOverlay.Right ??
+                (RightXboxImpulse == 0 ? RightTrigger : XboxImpulseTriggerEffect.Encode(RightXboxImpulse)),
         };
 
         internal static DualSensePhysicalOutputSnapshot Default => new(
@@ -346,6 +354,60 @@ namespace DS4Windows.InputDevices
                 });
                 return true;
             }
+        }
+
+        internal bool TryUpdateDsxOverlay(object owner, Func<DualSenseDsxOverlay, DualSenseDsxOverlay> update, out bool changed)
+        {
+            ArgumentNullException.ThrowIfNull(owner);
+            lock (syncRoot)
+            {
+                changed = false;
+                if (latest.DsxOverlay.Owner != null && !ReferenceEquals(latest.DsxOverlay.Owner, owner)) return false;
+                var next = update(latest.DsxOverlay) with { Owner = owner };
+                int removed = DualSenseDsxOverlay.Released(latest.DsxOverlay, next);
+                changed = PublishLocked(latest with { DsxOverlay = next,
+                    DsxReleaseFields = latest.DsxReleaseFields | removed,
+                    DsxReleaseRevision = latest.DsxReleaseRevision + (removed == 0 ? 0 : 1) });
+                return true;
+            }
+        }
+
+        internal bool ReleaseDsxOverlay(object owner, out bool changed)
+        {
+            lock (syncRoot)
+            {
+                changed = false;
+                if (!ReferenceEquals(latest.DsxOverlay.Owner, owner)) return false;
+                changed = PublishLocked(latest with { DsxOverlay = default,
+                    DsxReleaseFields = latest.DsxReleaseFields | latest.DsxOverlay.Fields,
+                    DsxReleaseRevision = latest.DsxReleaseRevision + 1 });
+                return true;
+            }
+        }
+
+        internal void AcknowledgeDsxRelease(long revision, int fields)
+        {
+            lock (syncRoot)
+                if (latest.DsxReleaseRevision == revision)
+                    PublishLocked(latest with { DsxReleaseFields = latest.DsxReleaseFields & ~fields });
+        }
+
+        internal void ObserveDsxNativeState(byte[] report, int offset)
+        {
+            lock (syncRoot) PublishLocked(latest with { DsxNativeState = latest.DsxNativeState.ObserveNative(report, offset) });
+        }
+
+        internal void ClearDsxNativeState()
+        {
+            lock (syncRoot) PublishLocked(latest with { DsxNativeState = default });
+        }
+
+        internal bool SetTriggerLabTrigger(TriggerId trigger, in DualSenseDevice.TriggerEffectData effect, bool active)
+        {
+            lock (syncRoot)
+                return PublishLocked(trigger == TriggerId.LeftTrigger
+                    ? latest with { LeftTrigger = effect, LeftTriggerLabActive = active }
+                    : latest with { RightTrigger = effect, RightTriggerLabActive = active });
         }
 
         internal bool SetMicrophoneMute(bool enabled, bool muted)

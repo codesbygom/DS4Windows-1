@@ -15,9 +15,23 @@ internal static class TriggerLabProfileEffectRestoration
     {
         if (device == null) return;
         Apply(settings, left, right,
-            (trigger, effect, active) => TriggerLabEffectEncoder.ApplyToDevice(
-                device, trigger, effect, active),
-            device.PrepareTriggerEffect);
+            (trigger, effect, active) => TriggerLabEffectEncoder.ApplyProfileToDevice(
+                device, trigger, effect, active, settings?.Enabled == true &&
+                    (trigger == TriggerId.LeftTrigger ? settings.LeftGameRumbleVibration : settings.RightGameRumbleVibration)),
+            (trigger, effect, effectSettings) =>
+            {
+                // A game-rumble-only profile claims only selected sides. Do
+                // not publish an intermediate unowned legacy state there;
+                // the physical worker could expose a held mod between calls.
+                bool gameRumble = settings?.Enabled == true &&
+                    (trigger == TriggerId.LeftTrigger ? settings.LeftGameRumbleVibration : settings.RightGameRumbleVibration);
+                if (gameRumble)
+                    TriggerLabEffectEncoder.ApplyProfileToDevice(device, trigger,
+                        trigger == TriggerId.LeftTrigger ? settings.Left : settings.Right,
+                        persistentEffectActive: false, gameRumbleEnabled: true);
+                else
+                    device.PrepareTriggerEffect(trigger, effect, effectSettings);
+            });
     }
 
     // Callbacks keep the production decision independently testable without

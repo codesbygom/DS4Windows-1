@@ -1,4 +1,4 @@
-﻿/*
+/*
 DS4Windows
 Copyright (C) 2023  Travis Nickles
 
@@ -353,6 +353,26 @@ namespace DS4WinWPF.DS4Forms.ViewModels
         public string UdpIpAddress { get => DS4Windows.Global.getUDPServerListenAddress();
             set => DS4Windows.Global.setUDPServerListenAddress(value); }
         public int UdpPort { get => DS4Windows.Global.getUDPServerPortNum(); set => DS4Windows.Global.setUDPServerPort(value); }
+
+        // Keep edits local until Apply validates the entire endpoint. A failed
+        // bind can retain a valid requested preference, but an invalid draft
+        // must not silently enable the previous endpoint on the next Start.
+        private bool useDSXUDPServer = DS4Windows.Global.IsUsingDSXUDPServer();
+        public bool UseDSXUDPServer
+        {
+            get => useDSXUDPServer;
+            set
+            {
+                if (useDSXUDPServer == value) return;
+                useDSXUDPServer = value;
+                UseDSXUDPServerChanged?.Invoke(this, EventArgs.Empty);
+            }
+        }
+        public event EventHandler UseDSXUDPServerChanged;
+
+        public string DSXUdpIpAddress { get; set; } = DS4Windows.Global.GetDSXUDPServerListenAddress();
+
+        public int DSXUdpPort { get; set; } = DS4Windows.Global.GetDSXUDPServerPortNum();
 
         public bool UseUdpSmoothing
         {

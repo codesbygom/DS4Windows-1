@@ -1,4 +1,4 @@
-﻿/*
+/*
 DS4Windows
 Copyright (C) 2023  Travis Nickles
 
@@ -108,6 +108,12 @@ namespace DS4Windows
 
         private UdpServer _udpServer;
         private readonly UdpMotionObservationWorker switch2UdpObservations;
+        private DSXUdpServer _dsxUdpServer;
+        private object dsxOutputGate = new();
+        private object DsxOutputGate => LazyInitializer.EnsureInitialized(ref dsxOutputGate);
+        private DsxSession dsxSession;
+        private long dsxConfigurationRevision;
+        private string dsxLastError = "";
         private OutputSlotManager outputslotMan;
 
         private HashSet<string> hidDeviceHidingAffectedDevs = new HashSet<string>();
@@ -1978,6 +1984,188 @@ namespace DS4Windows
             }
         }
 
+        private sealed class DsxSession
+        {
+            internal readonly DSXUdpServer Server = new();
+            internal readonly DSXControllerAdmission<DS4Device> Admission;
+            internal readonly HashSet<InputDevices.DualSenseDevice> OwnedDevices = new();
+            internal DsxSession() { Admission = new DSXControllerAdmission<DS4Device>(this, MAX_DS4_CONTROLLER_COUNT); }
+        }
+
+        private DSXUdpServer CaptureDsxServer() { lock (DsxOutputGate) return _dsxUdpServer; }
+        public bool DSXUDPServerRunning => CaptureDsxServer()?.IsRunning == true;
+        public string DSXUDPServerError
+        {
+            get
+            {
+                DSXUdpServer server; string error;
+                lock (DsxOutputGate) { server = _dsxUdpServer; error = dsxLastError; }
+                return server?.LastError ?? error;
+            }
+        }
+        public string DSXUDPServerAddress => CaptureDsxServer()?.ListenAddress ?? "";
+        public int DSXUDPServerPort => CaptureDsxServer()?.Port ?? 0;
+
+        public void ChangeDSXUDPStatus(bool state)
+        {
+            DSXUdpServer previous;
+            long request;
+            lock (serviceLifecycleLock)
+            {
+                request = ++dsxConfigurationRevision;
+                previous = DetachDsxSession();
+                if (!state) lock (DsxOutputGate) dsxLastError = "";
+            }
+            // The worker may be completing a callback. Never join it while
+            // holding either lifecycle or callback admission locks.
+            previous?.Dispose();
+            lock (serviceLifecycleLock)
+            {
+                if (request != dsxConfigurationRevision || !state || !running) return;
+                var session = new DsxSession();
+                session.Server.PacketStarting = () => BeginDsxPacket(session);
+                session.Server.PacketCompleted = () => EndDsxPacket(session);
+                session.Server.UnexpectedStopped = error => OnDsxUnexpectedStopped(session, error);
+                session.Server.OnTriggerUpdate += (index, trigger, data) => UpdateDsxDevice(session, index,
+                    overlay => trigger == InputDevices.TriggerId.LeftTrigger
+                        ? overlay with { Left = InputDevices.DualSenseDsxOverlay.ReadTrigger(data, 0) }
+                        : overlay with { Right = InputDevices.DualSenseDsxOverlay.ReadTrigger(data, 0) });
+                session.Server.OnRGBUpdate += (index, r, g, b, brightness) => UpdateDsxDevice(session, index,
+                    overlay => overlay with { Color = new DS4Color((byte)(r * brightness / 255),
+                        (byte)(g * brightness / 255), (byte)(b * brightness / 255)) });
+                session.Server.OnMicLEDUpdate += (index, mode) => UpdateDsxDevice(session, index,
+                    overlay => overlay with { MicLed = mode switch { 0 => (byte)1, 1 => (byte)2, _ => (byte)0 } });
+                session.Server.OnPlayerLEDUpdate += (index, leds) => UpdateDsxDevice(session, index,
+                    overlay => overlay with { PlayerLeds = (byte)Enumerable.Range(0, 5)
+                        .Where(i => leds[i]).Sum(i => 1 << i) });
+                session.Server.OnResetUserSettings += index => UpdateDsxDevice(session, index, null);
+                session.Server.GetStatus = () => ReadDsxStatus(session);
+                lock (DsxOutputGate)
+                {
+                    dsxSession = session;
+                    _dsxUdpServer = session.Server;
+                    dsxLastError = "";
+                }
+                if (!session.Server.Start(Global.GetDSXUDPServerPortNum(), Global.GetDSXUDPServerListenAddress()))
+                {
+                    lock (DsxOutputGate) dsxLastError = session.Server.LastError;
+                    // Keep the failed server's truthful status for the UI;
+                    // Apply/Retry creates a fresh session.
+                    LogDebug("Could not start DSX UDP server: " + session.Server.LastError);
+                }
+                else LogDebug($"DSX UDP mod compatibility server listening on {session.Server.ListenAddress}:{session.Server.Port}");
+            }
+        }
+
+        private DSXUdpServer DetachDsxSession()
+        {
+            lock (DsxOutputGate)
+            {
+                DsxSession previous = dsxSession;
+                dsxSession = null;
+                _dsxUdpServer = null;
+                if (previous == null) return null;
+                previous.Admission.Revoke(previous);
+                foreach (var device in previous.OwnedDevices) device.ReleaseDsxOverlay(previous);
+                previous.OwnedDevices.Clear();
+                return previous.Server;
+            }
+        }
+
+        private void OnDsxUnexpectedStopped(DsxSession session, string error)
+        {
+            lock (DsxOutputGate)
+            {
+                if (!ReferenceEquals(dsxSession, session)) return;
+                DetachDsxSession();
+                dsxLastError = error;
+            }
+            // This callback runs as the receive worker exits. It only revokes
+            // that generation; it must never join itself or start a replacement.
+        }
+
+        private void BeginDsxPacket(DsxSession session)
+        {
+            lock (DsxOutputGate)
+            {
+                if (!ReferenceEquals(dsxSession, session) || !Volatile.Read(ref running)) return;
+                // Capture once for the entire admitted packet, not once per
+                // instruction. A slot replacement mid-batch is never retargeted.
+                session.Admission.Begin(session, DS4Controllers, (index, device) =>
+                    device is InputDevices.DualSenseDevice && !device.IsRemoving && !device.IsRemoved &&
+                    TryCaptureProfileActionTarget(index, device, out _));
+            }
+        }
+
+        private void EndDsxPacket(DsxSession session)
+        {
+            lock (DsxOutputGate)
+            {
+                session.Admission.End(session);
+            }
+        }
+
+        private void UpdateDsxDevice(DsxSession session, int index,
+            Func<InputDevices.DualSenseDsxOverlay, InputDevices.DualSenseDsxOverlay> update)
+        {
+            lock (DsxOutputGate)
+            {
+                if (!ReferenceEquals(dsxSession, session) || !Volatile.Read(ref running) ||
+                    !session.Admission.TryGet(session, index, DS4Controllers, out var admitted) ||
+                    admitted is not InputDevices.DualSenseDevice device || device.IsRemoving || device.IsRemoved) return;
+                // Composite DualSense devices retain the existing untabled
+                // lifecycle. Serialize with its exact removal claim; do not
+                // require the legacy-HID table that deliberately excludes it.
+                lock (device.removeLocker)
+                {
+                    if (!TryCaptureProfileActionTarget(index, device, out var target) ||
+                        !target.TryAcquire(out var lease)) return;
+                    using (lease)
+                    {
+                        if (update == null)
+                        {
+                            device.ReleaseDsxOverlay(session);
+                            session.OwnedDevices.Remove(device);
+                        }
+                        else if (device.TryUpdateDsxOverlay(session, update)) session.OwnedDevices.Add(device);
+                    }
+                }
+            }
+        }
+
+        private void ReleaseDsxDevice(DS4Device retiringDevice)
+        {
+            lock (DsxOutputGate)
+            {
+                if (retiringDevice is InputDevices.DualSenseDevice device &&
+                    dsxSession?.OwnedDevices.Remove(device) == true)
+                    device.ReleaseDsxOverlay(dsxSession);
+            }
+        }
+
+        private DSXStatusResponse ReadDsxStatus(DsxSession session)
+        {
+            var result = new DSXStatusResponse { Status = "DS4Windows DSX UDP Server Running",
+                TimeReceived = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss"), Devices = new List<DSXDeviceInfo>() };
+            lock (DsxOutputGate)
+            {
+                if (!ReferenceEquals(dsxSession, session) || !Volatile.Read(ref running)) return result;
+                for (int index = 0; index < DS4Controllers.Length; index++)
+                {
+                    if (!session.Admission.TryGet(session, index, DS4Controllers, out var device) ||
+                        device.IsRemoving || device.IsRemoved) continue;
+                    result.Devices.Add(new DSXDeviceInfo { Index = index, MacAddress = device.MacAddress,
+                        DeviceType = device is InputDevices.DualSenseDevice { SubType: InputDevices.DualSenseDevice.DeviceSubType.DSEdge } ? 1 : 0,
+                        ConnectionType = device.ConnectionType == ConnectionType.BT ? 1 : 0,
+                        BatteryLevel = device.Battery, IsSupportAT = true, IsSupportLightBar = true,
+                        IsSupportPlayerLED = true, IsSupportLegacyPlayerLED = true, IsSupportMicLED = true });
+                }
+            }
+            result.isControllerConnected = result.Devices.Count != 0;
+            result.BatteryLevel = result.Devices.Count == 0 ? 0 : result.Devices[0].BatteryLevel;
+            return result;
+        }
+
         public void ChangeOSCListenerStatus(bool state)
         {
             if (state)
@@ -2755,6 +2943,11 @@ namespace DS4Windows
                         AppLogger.LogToTray(errMsg, true, true);
                     }
                 }
+
+                if (Global.IsUsingDSXUDPServer())
+                {
+                    ChangeDSXUDPStatus(true);
+                }
             }
             inServiceTask = false;
             runHotPlug = true;
@@ -2945,10 +3138,21 @@ namespace DS4Windows
         public bool Stop(bool showlog = true, bool immediateUnplug = false)
         {
             if (ControlServiceMouseCallbackSubscription.IsInsideCallback) return false;
-            lock (serviceLifecycleLock)
+            DSXUdpServer detached = null;
+            bool stopped;
+            try
             {
-                return StopCore(showlog, immediateUnplug);
+                lock (serviceLifecycleLock)
+                {
+                    ++dsxConfigurationRevision;
+                    detached = DetachDsxSession();
+                    stopped = StopCore(showlog, immediateUnplug);
+                    if (stopped) lock (DsxOutputGate) dsxLastError = "";
+                }
             }
+            finally { detached?.Dispose(); }
+            if (!stopped && running && Global.IsUsingDSXUDPServer()) ChangeDSXUDPStatus(true);
+            return stopped;
         }
 
         private bool StopCore(bool showlog, bool immediateUnplug)
@@ -3870,14 +4074,10 @@ namespace DS4Windows
             }
 
             TriggerLabProfileSettings triggerLab = Global.store.triggerLabSettings[ind].Normalize();
-            if (device is InputDevices.DualSenseDevice triggerLabDevice && triggerLab.HasActiveOverride)
+            if (device is InputDevices.DualSenseDevice triggerLabDevice)
             {
-                TriggerLabEffectEncoder.ApplyToDevice(triggerLabDevice,
-                    InputDevices.TriggerId.LeftTrigger, triggerLab.Left,
-                    triggerLab.LeftActive);
-                TriggerLabEffectEncoder.ApplyToDevice(triggerLabDevice,
-                    InputDevices.TriggerId.RightTrigger, triggerLab.Right,
-                    triggerLab.RightActive);
+                TriggerLabProfileEffectRestoration.ApplyToDevice(triggerLabDevice,
+                    triggerLab, Global.L2OutputSettings[ind], Global.R2OutputSettings[ind]);
             }
             else
             {
@@ -4699,6 +4899,7 @@ namespace DS4Windows
             {
                 return;
             }
+            ReleaseDsxDevice(device);
             DeactivateGameBarCompatibilityOutput(index);
             CurrentState[index].Battery = PreviousState[index].Battery = 0;
             if (!useDInputOnly[index])

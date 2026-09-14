@@ -1,4 +1,4 @@
-﻿/*
+/*
 DS4Windows
 Copyright (C) 2023  Travis Nickles
 
@@ -636,6 +636,35 @@ namespace DS4WinWPF.DS4Control.DTOXml
             get; set;
         } = BackingStore.DEFAULT_UDP_SERV_LISTEN_ADDR;
 
+        [XmlIgnore]
+        public bool UseDSXUDPServer
+        {
+            get; set;
+        }
+
+        [XmlElement("UseDSXUDPServer")]
+        public string UseDSXUDPServerString
+        {
+            get => UseDSXUDPServer.ToString();
+            set
+            {
+                if (bool.TryParse(value, out bool temp))
+                {
+                    UseDSXUDPServer = temp;
+                }
+            }
+        }
+
+        public int DSXUDPServerPort
+        {
+            get; set;
+        } = BackingStore.DEFAULT_DSX_UDP_SERV_PORT;
+
+        public string DSXUDPServerListenAddress
+        {
+            get; set;
+        } = BackingStore.DEFAULT_DSX_UDP_SERV_LISTEN_ADDR;
+
         public UDPSrvSmoothingOptionsGroup UDPServerSmoothingOptions
         {
             get; set;
@@ -924,6 +953,9 @@ namespace DS4WinWPF.DS4Control.DTOXml
             UseUDPServer = source.useUDPServ;
             UDPServerPort = source.udpServPort;
             UDPServerListenAddress = source.udpServListenAddress;
+            UseDSXUDPServer = source.useDSXUDPServ;
+            DSXUDPServerPort = source.dsxUdpServPort;
+            DSXUDPServerListenAddress = source.dsxUdpServListenAddress;
             UDPServerSmoothingOptions = new UDPSrvSmoothingOptionsGroup()
             {
                 UseSmoothing = source.useUdpSmoothing,
@@ -1040,6 +1072,15 @@ namespace DS4WinWPF.DS4Control.DTOXml
             {
                 destination.udpServListenAddress = UDPServerListenAddress;
             }
+
+            // Malformed or remote bindings must not silently open a listener.
+            // Keep old profiles usable with safe, disabled connection defaults.
+            bool validDsxEndpoint = DS4Windows.DS4Control.DSXUdpServer.TryValidateEndpoint(
+                DSXUDPServerPort, DSXUDPServerListenAddress, out var dsxAddress, out _);
+            destination.useDSXUDPServ = UseDSXUDPServer && validDsxEndpoint;
+            destination.dsxUdpServPort = validDsxEndpoint ? DSXUDPServerPort : BackingStore.DEFAULT_DSX_UDP_SERV_PORT;
+            destination.dsxUdpServListenAddress = validDsxEndpoint
+                ? dsxAddress.ToString() : BackingStore.DEFAULT_DSX_UDP_SERV_LISTEN_ADDR;
 
             destination.useUdpSmoothing = UDPServerSmoothingOptions.UseSmoothing;
             destination.udpSmoothingMincutoff = UDPServerSmoothingOptions.UdpSmoothMinCutoff;

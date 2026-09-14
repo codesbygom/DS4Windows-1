@@ -1,4 +1,4 @@
-﻿/*
+/*
 DS4Windows
 Copyright (C) 2023  Travis Nickles
 
@@ -152,6 +152,7 @@ namespace DS4WinWPF.DS4Forms
             {
                 mainWinVM.RefreshRuntimeState(App.rootHub);
                 RefreshSwitch2JoyConManualRows();
+                RefreshDSXUdpStatus();
             };
             overviewStatusRefreshTimer.Start();
 
@@ -159,6 +160,7 @@ namespace DS4WinWPF.DS4Forms
             settingsWrapVM = new SettingsViewModel();
             settingsTab.DataContext = settingsWrapVM;
             RefreshViiperStatusText();
+            RefreshDSXUdpStatus();
             logvm = new LogViewModel(App.rootHub);
             //logListView.ItemsSource = logvm.LogItems;
             logListView.DataContext = logvm;
@@ -2532,6 +2534,71 @@ Suspend support not enabled.", true);
                     App.rootHub.ChangeMotionEventStatus(status);
                 });
             }
+        }
+
+        private bool changingDSXUdp;
+        private string dsxUdpValidationError;
+
+        private async void UseDSXUdpServerCk_Click(object sender, RoutedEventArgs e)
+        {
+            await ApplyDSXUdpSettingsAsync();
+        }
+
+        private async void DSXUdpApplyBtn_Click(object sender, RoutedEventArgs e)
+        {
+            await ApplyDSXUdpSettingsAsync();
+        }
+
+        private async Task ApplyDSXUdpSettingsAsync()
+        {
+            if (changingDSXUdp) return;
+            bool enabled = useDSXUdpServerCk.IsChecked == true;
+            dsxUdpValidationError = null;
+            if (enabled && !DS4Windows.DS4Control.DSXUdpServer.TryValidateEndpoint(
+                    dsxUpdPortNum.Value ?? 0, dsxUdpServerTxt.Text.Trim(), out _, out dsxUdpValidationError))
+            {
+                RefreshDSXUdpStatus();
+                return;
+            }
+
+            changingDSXUdp = true;
+            useDSXUdpServerCk.IsEnabled = false;
+            dsxUdpApplyBtn.IsEnabled = false;
+            try
+            {
+                Global.SetUsingDSXUDPServer(enabled);
+                if (enabled)
+                {
+                    Global.SetDSXUDPServerListenAddress(dsxUdpServerTxt.Text.Trim());
+                    Global.SetDSXUDPServerPort(dsxUpdPortNum.Value.Value);
+                }
+                bool saved = Global.Save();
+                await Task.Run(() => App.rootHub.ChangeDSXUDPStatus(enabled));
+                if (!saved)
+                    dsxUdpValidationError = "Applied for this session, but the preference could not be saved. Check access to the settings folder.";
+            }
+            catch (Exception error)
+            {
+                dsxUdpValidationError = "Game mod support could not apply these settings. Check the log, then retry.";
+                AppLogger.LogToGui($"DSX settings could not be applied: {error.Message}", true);
+            }
+            finally
+            {
+                changingDSXUdp = false;
+                useDSXUdpServerCk.IsEnabled = true;
+                dsxUdpApplyBtn.IsEnabled = true;
+                RefreshDSXUdpStatus();
+            }
+        }
+
+        private void RefreshDSXUdpStatus()
+        {
+            if (dsxUdpStatusText == null || App.rootHub == null) return;
+            var service = App.rootHub;
+            dsxUdpStatusText.Text = DSXModStatusPresentation.Describe(
+                Global.IsUsingDSXUDPServer(), service.running, service.DSXUDPServerRunning,
+                service.DSXUDPServerAddress, service.DSXUDPServerPort,
+                dsxUdpValidationError ?? service.DSXUDPServerError, changingDSXUdp);
         }
 
         private void ProfFolderBtn_Click(object sender, RoutedEventArgs e)

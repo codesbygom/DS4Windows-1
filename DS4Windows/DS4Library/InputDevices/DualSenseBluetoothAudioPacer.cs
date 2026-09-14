@@ -1197,6 +1197,14 @@ namespace DS4Windows.InputDevices
                     reportId = 0;
                     return false;
                 }
+                // Admission, not a caller's attempted write, invalidates the
+                // old local-trigger proof. Use the queue-owned copy: a reset
+                // can restore native state before an identical local effect
+                // is requested again, and that request must reach the helper.
+                InvalidateLocalTriggerProofLocked(command.Payload.Buffer.AsSpan(
+                    sizeof(long) + sizeof(int) + sizeof(long) +
+                    DualSenseBluetoothPhysicalOutputSequence.ControllerStateSourceOffset,
+                    DualSenseBluetoothPhysicalOutputSequence.ControllerStatePayloadLength));
             }
 
             outboundAvailable.Set();
@@ -1664,6 +1672,16 @@ namespace DS4Windows.InputDevices
             return true;
         }
 
+        private void InvalidateLocalTriggerProofLocked(ReadOnlySpan<byte> admittedState)
+        {
+            // A validity-masked delta on the opposite trigger (or a steady
+            // light/audio report) cannot replace the cached local command.
+            // Do not filter, merge, or deduplicate the admitted native delta.
+            if (latestControllerStateAvailable &&
+                (admittedState[0] & latestControllerState[0] & 0x0C) != 0)
+                latestControllerStateAvailable = false;
+        }
+
         /// <summary>
         /// Publishes a locally composed regular-rumble transition through the
         /// same ordered controller-state mailbox as native game state. The
@@ -1823,6 +1841,8 @@ namespace DS4Windows.InputDevices
                     capacityUnavailable = true;
                     return false;
                 }
+
+                InvalidateLocalTriggerProofLocked(command.Payload.Buffer.AsSpan(0, stateLength));
 
                 Buffer.BlockCopy(quiescentTemplate,
                     DualSenseBluetoothPhysicalOutputSequence.ControllerStateSourceOffset,

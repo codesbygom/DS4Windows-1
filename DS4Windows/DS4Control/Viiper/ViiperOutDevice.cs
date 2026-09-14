@@ -6571,10 +6571,11 @@ namespace DS4Windows
                     !Global.EnableOutputDataToDS4[deviceIndex]) return true;
                 if (!IsExactNativeDualSenseCommand(feedback, length)) return true;
                 target = (DualSenseDevice)context.Target;
-                PrepareNativeDualSenseOutputReportForProfileInto(feedback,
+                byte triggerLabValidity = PrepareNativeDualSenseOutputReportForProfileInto(feedback,
                     deviceIndex, nativeOutputScratch);
                 if (!target.WriteRawOutputReportFromGame(nativeOutputScratch, 0,
-                    DualSenseNativeOutputReportLength, out revision)) return false;
+                    DualSenseNativeOutputReportLength, out revision, feedback,
+                    DualSenseNativeOutputReportOffset, triggerLabValidity)) return false;
             }
             // Foreground/process diagnostics must not extend the short physical
             // target admission boundary or prevent a stop from sealing it.
@@ -8046,17 +8047,19 @@ namespace DS4Windows
                     TriggerLabForDevice(deviceIndex);
                 if (lastTriggerLabLeftRumbleEnabled)
                 {
-                    TriggerLabEffectEncoder.ApplyToDevice(dualSenseDevice,
+                    TriggerLabEffectEncoder.ApplyProfileToDevice(dualSenseDevice,
                         TriggerId.LeftTrigger, settings?.Left,
                         settings?.Enabled == true &&
-                            settings.LeftActive);
+                            settings.LeftActive,
+                        settings?.Enabled == true && settings.LeftGameRumbleVibration);
                 }
                 if (lastTriggerLabRightRumbleEnabled)
                 {
-                    TriggerLabEffectEncoder.ApplyToDevice(dualSenseDevice,
+                    TriggerLabEffectEncoder.ApplyProfileToDevice(dualSenseDevice,
                         TriggerId.RightTrigger, settings?.Right,
                         settings?.Enabled == true &&
-                            settings.RightActive);
+                            settings.RightActive,
+                        settings?.Enabled == true && settings.RightGameRumbleVibration);
                 }
             }
         }
@@ -8697,13 +8700,13 @@ namespace DS4Windows
                 return false;
             }
 
-            PrepareNativeDualSenseOutputReportForProfileInto(feedback,
+            byte triggerLabValidity = PrepareNativeDualSenseOutputReportForProfileInto(feedback,
                 deviceIndex, nativeOutputScratch);
             bool applied = dualSenseDevice.WriteRawOutputReportFromGame(
                 nativeOutputScratch,
                 0,
                 DualSenseNativeOutputReportLength,
-                out long nativeOutputRevision);
+                out long nativeOutputRevision, feedback, DualSenseNativeOutputReportOffset, triggerLabValidity);
             if (applied)
             {
                 TraceNativeGameOutput(feedback,
@@ -8714,7 +8717,7 @@ namespace DS4Windows
             return applied;
         }
 
-        internal static void PrepareNativeDualSenseOutputReportForProfileInto(
+        internal static byte PrepareNativeDualSenseOutputReportForProfileInto(
             byte[] feedback, int deviceIndex, byte[] destination)
         {
             if (feedback == null || feedback.Length <
@@ -8736,7 +8739,7 @@ namespace DS4Windows
             Buffer.BlockCopy(feedback, DualSenseNativeOutputReportOffset,
                 destination, 0, DualSenseNativeOutputReportLength);
 
-            ApplyTriggerLabNativeOverrides(destination, 1, 11, 22,
+            return ApplyTriggerLabNativeOverrides(destination, 1, 11, 22,
                 TriggerLabForDevice(deviceIndex), feedback[1], feedback[0]);
         }
 
@@ -8805,13 +8808,14 @@ namespace DS4Windows
                 feedback.Length >= DualSenseNativeOutputReportOffset +
                     DualSenseNativeOutputReportLength &&
                 feedback[DualSenseNativeOutputReportOffset] == 0x02;
+            byte triggerLabValidity = 0;
             if (hasNativeGameState)
             {
                 // VIIPER's combined carrier contains the persistent media
                 // snapshot. This callback represents one exact game-authored
                 // SET_REPORT, so replace its common-state section before the
                 // atomic compositor applies local overrides.
-                PrepareNativeDualSenseOutputReportForProfileInto(feedback,
+                triggerLabValidity = PrepareNativeDualSenseOutputReportForProfileInto(feedback,
                     deviceIndex, nativeOutputScratch);
                 CopyPreparedNativeDualSenseStateIntoCombinedCarrier(
                     nativeOutputScratch, report, reportOffset + 13);
@@ -8833,7 +8837,8 @@ namespace DS4Windows
                 DualSenseCombinedBluetoothReportOffset,
                 DualSenseCombinedBluetoothReportLength,
                 hasNativeGameState,
-                out long nativeOutputRevision);
+                out long nativeOutputRevision, hasNativeGameState ? feedback : null,
+                DualSenseNativeOutputReportOffset, triggerLabValidity);
             bool nativeStateAdmitted = hasNativeGameState &&
                 nativeOutputRevision > 0;
             if (nativeStateAdmitted)
@@ -9839,20 +9844,22 @@ namespace DS4Windows
         private static extern uint GetWindowThreadProcessId(IntPtr window,
             out uint processId);
 
-        private static void ApplyTriggerLabNativeOverrides(byte[] report,
+        private static byte ApplyTriggerLabNativeOverrides(byte[] report,
             int flagsOffset, int rightTriggerOffset, int leftTriggerOffset,
             TriggerLabProfileSettings triggerLab, byte lightFast,
             byte heavySlow)
         {
             if (triggerLab?.Enabled != true)
             {
-                return;
+                return 0;
             }
 
+            byte authoredValidity = 0;
             bool rightPersistent = triggerLab.RightActive;
             bool rightRumble = triggerLab.RightGameRumbleVibration;
             if (rightPersistent || rightRumble)
             {
+                authoredValidity |= 0x04;
                 report[flagsOffset] |= 0x04;
                 if (rightRumble)
                 {
@@ -9871,6 +9878,7 @@ namespace DS4Windows
             bool leftRumble = triggerLab.LeftGameRumbleVibration;
             if (leftPersistent || leftRumble)
             {
+                authoredValidity |= 0x08;
                 report[flagsOffset] |= 0x08;
                 if (leftRumble)
                 {
@@ -9884,6 +9892,7 @@ namespace DS4Windows
                         leftTriggerOffset, triggerLab.Left, true);
                 }
             }
+            return authoredValidity;
         }
 
         private static TriggerLabProfileSettings TriggerLabForDevice(int deviceIndex)
