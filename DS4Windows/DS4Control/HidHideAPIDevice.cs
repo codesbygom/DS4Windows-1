@@ -25,7 +25,7 @@ using DS4Windows;
 
 namespace DS4WinWPF.DS4Control
 {
-    class HidHideAPIDevice : IDisposable
+    class HidHideAPIDevice : IHidHideConfigurationDevice
     {
         private const uint IOCTL_GET_WHITELIST = 0x80016000;
         private const uint IOCTL_SET_WHITELIST = 0x80016004;
@@ -42,7 +42,7 @@ namespace DS4WinWPF.DS4Control
 
         private SafeHandle hidHideHandle;
 
-        public HidHideAPIDevice(bool writeAccess = true)
+        public HidHideAPIDevice(bool writeAccess = true, bool exclusive = false)
         {
             uint desiredAccess = NativeMethods.GENERIC_READ;
             if (writeAccess)
@@ -52,7 +52,7 @@ namespace DS4WinWPF.DS4Control
 
             hidHideHandle = NativeMethods.CreateFile(CONTROL_DEVICE_FILENAME,
                     desiredAccess,
-                    NativeMethods.FILE_SHARE_READ | NativeMethods.FILE_SHARE_WRITE,
+                    exclusive ? 0 : NativeMethods.FILE_SHARE_READ | NativeMethods.FILE_SHARE_WRITE,
                     IntPtr.Zero,
                     NativeMethods.OpenExisting,
                     NativeMethods.FILE_ATTRIBUTE_NORMAL, 0);
@@ -203,6 +203,14 @@ namespace DS4WinWPF.DS4Control
         {
             return TryGetStringList(IOCTL_GET_WHITELIST, out instances);
         }
+
+        // Configuration repair must preserve the exact list. The stricter
+        // reader is intentionally isolated from existing runtime refreshes.
+        bool IHidHideConfigurationDevice.TryGetWhitelist(out List<string> instances) =>
+            HidHideConfigurationListReader.TryRead(hidHideHandle, IOCTL_GET_WHITELIST, out instances);
+
+        bool IHidHideConfigurationDevice.TryGetBlacklist(out List<string> instances) =>
+            HidHideConfigurationListReader.TryRead(hidHideHandle, IOCTL_GET_BLACKLIST, out instances);
 
         private bool TryGetStringList(uint controlCode,
             out List<string> instances)

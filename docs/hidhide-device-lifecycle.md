@@ -47,6 +47,43 @@ fallible driver queries. DS4Windows does not mutate whitelist policy, cache a
 restore baseline, or erase its last verified affected-device snapshot unless
 those queries succeed.
 
+## Configuration-client application safety
+
+Windows app-execution aliases (for example a WindowsApps Python launcher) are
+not ordinary executable files. HidHide 1.5.230's configuration client can throw
+an uncaught filesystem exception while displaying one in its Applications tab.
+DS4Windows therefore inspects the file's reparse tag without following it
+before registering startup or auto-profile applications. Confirmed aliases,
+directories and unreadable application paths are not newly registered. Ordinary
+file symlinks and junction paths retain their existing support. A read failure
+does not authorize deleting an existing application permission.
+
+The HidHide configuration button checks the current application list before
+launching the external client. Confirmed app aliases are shown by their exact
+paths, with an opt-in repair prompt that defaults to No. Nothing is pruned
+silently, and missing ordinary applications are left alone. Inverse-list mode
+is never automatically repaired because removal would alter its deny policy.
+
+After confirmation, repair acquires the existing driver-mutation boundary and
+an exclusive HidHide control handle. It requires the original application list,
+inverse flag, active flag and hidden-device list to be unchanged. A unique,
+flushed JSON backup of all four fields is written to `Backups/HidHide` in the
+settings folder before any mutation. Alias metadata is checked again after
+backup; only those exact entries are removed, then the full policy is read back
+and compared. The control handle is closed before the GUI opens.
+
+Unreadable state, changed state or failed backup prevents mutation. Failed
+writes/readback are reported as uncertain rather than treated as success or
+blindly rolled back; the backup path remains available. This configuration-only
+reader validates bounded MULTI_SZ replies while preserving exact paths and the
+released driver's empty-list/padding conventions. Entries containing unpaired
+UTF-16 surrogates or other non-round-trippable policy text block repair before
+backup or mutation, because the existing writer and JSON serializer would
+otherwise change those code units. Valid surrogate pairs are preserved.
+Runtime list readers and
+input/haptics paths are unchanged. Filesystem revalidation is not a lock against
+an external process deliberately replacing paths immediately afterward.
+
 ## Steam Input reclaim
 
 Automatic Steam Input reclaim never invokes `pnputil /restart-device` for an

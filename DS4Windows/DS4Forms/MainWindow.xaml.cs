@@ -87,6 +87,7 @@ namespace DS4WinWPF.DS4Forms
         private ProfileEditor editor;
         private int shutdownRequested;
         private bool profileEditorLoading;
+        private bool hidHideClientLaunchPending;
         private int profileEditorReturnTabIndex = -1;
         private bool profileEditorNavigationChanging;
         private readonly HashSet<int> overviewDirtyControllerIndices = new();
@@ -3551,20 +3552,58 @@ Suspend support not enabled.", true);
             Util.StartProcessHelper("https://gamepad-tester.com/");
         }
 
-        private void HidHideBtn_Click(object sender, RoutedEventArgs e)
+        private async void HidHideBtn_Click(object sender, RoutedEventArgs e)
         {
-            if (PortableLabContext.IsActive) return;
-            string path = Util.GetHidHideClientPath();
-            if (!string.IsNullOrEmpty(path))
+            if (PortableLabContext.IsActive || hidHideClientLaunchPending) return;
+            hidHideClientLaunchPending = true;
+            try
             {
-                try
+                string path = Util.GetHidHideClientPath();
+                if (string.IsNullOrEmpty(path))
+                    throw new FileNotFoundException("The HidHide configuration tool could not be found.");
+                HidHideConfigurationAudit audit = await Task.Run(
+                    () => App.rootHub.InspectHidHideConfiguration());
+                if (Volatile.Read(ref shutdownRequested) != 0) return;
+                if (audit.Failure != null)
                 {
-                    ProcessStartInfo startInfo = new ProcessStartInfo(path);
-                    startInfo.UseShellExecute = true;
-                    using (Process proc = Process.Start(startInfo)) { }
+                    MessageBox.Show(this, audit.Failure, "HidHide",
+                        MessageBoxButton.OK, MessageBoxImage.Warning);
+                    return;
                 }
-                catch { }
+                if (!audit.CanOpen)
+                {
+                    string entries = string.Join("\n", audit.Aliases);
+                    if (MessageBox.Show(this,
+                            "HidHide cannot open safely because its application list contains Windows app shortcuts:\n\n" +
+                            entries + "\n\nBack up the settings and remove only these shortcuts? Your controller-hiding rules and other applications will stay unchanged.",
+                            "Repair HidHide", MessageBoxButton.YesNo,
+                            MessageBoxImage.Warning, MessageBoxResult.No) != MessageBoxResult.Yes)
+                        return;
+                    HidHideConfigurationRepairResult repair = await Task.Run(
+                        () => App.rootHub.RepairHidHideConfiguration(audit));
+                    if (Volatile.Read(ref shutdownRequested) != 0) return;
+                    if (!repair.Succeeded)
+                    {
+                        MessageBox.Show(this, repair.Failure +
+                            (repair.BackupPath == null ? "" : "\n\nBackup: " + repair.BackupPath),
+                            "HidHide", MessageBoxButton.OK, MessageBoxImage.Warning);
+                        return;
+                    }
+                    App.rootHub.LogDebug("HidHide app shortcuts removed after confirmation. Backup: " + repair.BackupPath);
+                }
+                // Every driver handle has been disposed before starting the
+                // external client, which requires exclusive control access.
+                using (Process proc = Process.Start(new ProcessStartInfo(path)
+                    { UseShellExecute = true })) { }
             }
+            catch (Exception ex)
+            {
+                App.rootHub.LogDebug("HidHide configuration could not be opened: " + ex.Message, warning: true);
+                if (Volatile.Read(ref shutdownRequested) == 0)
+                    MessageBox.Show(this, "HidHide could not be opened. " + ex.Message,
+                        "HidHide", MessageBoxButton.OK, MessageBoxImage.Warning);
+            }
+            finally { hidHideClientLaunchPending = false; }
         }
 
         private void FakeExeNameExplainBtn_Click(object sender, RoutedEventArgs e)

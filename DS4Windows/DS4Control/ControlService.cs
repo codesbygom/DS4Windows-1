@@ -980,6 +980,21 @@ namespace DS4Windows
             }
 
             bool checkingCurrentProcess = string.IsNullOrEmpty(ExePath);
+            if (checkingCurrentProcess)
+            {
+                ExePath = Global.exelocation;
+                ExeName = "DS4Windows";
+                AddExe = true;
+            }
+            // Windows app-execution aliases are launcher reparse points, not
+            // real executables. HidHide 1.5's GUI throws while checking them.
+            // Never register one, resolve it to a different permission, or use
+            // an unreadable file as evidence that registration is safe.
+            if (AddExe && !CanRegisterHidHideApplication(ExePath, out string rejection))
+            {
+                LogDebug($"{ExeName} was not added to HidHide: {rejection}", warning: true);
+                return;
+            }
             LogDebug("HidHide control device found");
             lock (hidHideDriverMutationLock)
             {
@@ -989,10 +1004,6 @@ namespace DS4Windows
                     {
                         return;
                     }
-
-                    // Catch Blank Values and initialize for Startup. Also catches empty Values.
-                    // Also Catches Empty values in auto-profiler, and defaults to trying to re-add D4W. Will fail harmlessly later.
-                    if (ExePath == "") { ExePath = Global.exelocation; ExeName = "DS4Windows"; AddExe = true; }
 
                     if (!hidHideDevice.TryGetWhitelistInverseState(
                             out bool inverseAppCloak))
@@ -1083,6 +1094,29 @@ namespace DS4Windows
                     }
                 }
             }
+        }
+
+        internal static bool CanRegisterHidHideApplication(string path, out string reason)
+        {
+            bool inspected = HidHideApplicationPathGuard.TryInspect(path,
+                out bool alias, out int error);
+            reason = alias
+                ? "select the real application executable, not a Windows app shortcut."
+                : $"the application file could not be verified (Windows error {error}).";
+            return inspected && !alias;
+        }
+
+        internal HidHideConfigurationAudit InspectHidHideConfiguration()
+        {
+            lock (hidHideDriverMutationLock)
+                return HidHideConfigurationGuard.Create(Global.appdatapath).Inspect();
+        }
+
+        internal HidHideConfigurationRepairResult RepairHidHideConfiguration(
+            HidHideConfigurationAudit audit)
+        {
+            lock (hidHideDriverMutationLock)
+                return HidHideConfigurationGuard.Create(Global.appdatapath).Repair(audit);
         }
 
         // Cold prepared application only. Do not wait with publication paused:
