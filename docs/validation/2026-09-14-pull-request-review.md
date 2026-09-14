@@ -25,6 +25,34 @@ proposals with evidence. No released tag or asset is replaced by this source wor
 The source review of #70 covers production packaging/runtime boundaries, not a
 complete security audit of the experimental driver.
 
+## Completed integration and disposition
+
+- **#86 merged** in `d760391`; author ancestry retained, with the integration
+  corrections and documented compatibility boundaries below.
+- **#43 merged** in `7382275`: five additional macro tests, plus an expected-count
+  assertion preventing an empty/empty string-generation false pass.
+- **#45 merged** in `61593f9`: six additional historical profile migration tests.
+- **#41 incorporated and closed**: authored test cherry-picked as `611e805`,
+  preserving Cameron Beeley's authorship without unrelated branch history.
+- **#42 incorporated/superseded and closed**: remaining date assertion retained
+  in `19e53de` with contributor credit; stronger production parsing preserved.
+- **#44, #47, #48, #49 closed** with individual explanations and evidence for the
+  obsolete or superseded changes. Contributor branches were not deleted.
+- **#7, #8, #10, #11, #70 remain open** for the separate migration, validation,
+  and production-driver requirements identified above. None was blindly merged.
+
+GitHub confirms the three merges and six closures. All source changes are pushed
+to `main`. No released tag, public release asset, installed application, driver,
+controller session, startup task, or registry setting was changed by this review.
+
+Final combined validation after the follow-up integrations: **6,362 passed,
+zero failed, 11 gated skips** (6,373 total), x64 Release. Focused macro tests:
+**7/7**; profile migration: **8/8**; settings/profile/date: **30/30**.
+Evidence: `_results/pr-followups/all-prs-final.trx`, `pr43.trx`, `pr45.trx`, and
+`pr41-pr42.trx` in that same results directory. Hosted CI is separate from these
+local results; this document does not claim a new release or physical game-mod
+acceptance.
+
 ## Primary references
 
 - [DSX protocol example](https://github.com/Paliverse/DSX/tree/1614f003d7f00fa501e789c16eacb219993c1c16/Mod%20System%20%28DSX%20v3%29)
