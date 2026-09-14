@@ -2972,6 +2972,9 @@ try {
             $script:TargetUserSid,
             [StringComparison]::OrdinalIgnoreCase)) {
         $script:RunAtStartupEnabled = $false
+        # Configure/Retry must preserve this invocation's alternate-account
+        # deferral. The target user's saved startup preference is unchanged.
+        $script:RequestedRunAtStartupEnabled = $false
         Write-SetupLog (
             "Setup was elevated with alternate administrator credentials. " +
             "Installation will continue safely, but startup tasks for " +

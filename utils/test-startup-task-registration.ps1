@@ -1231,6 +1231,31 @@ Assert-Equal $script:StartupTaskFallbackActive $true "DS4 task launch failure di
 # Original task names only; runtime/cleanup ownership remains strict. Check
 # top-level wiring without running the installer or touching live drivers.
 $backendText = $ast.Extent.Text
+
+# Execute the production alternate-administrator guard with in-memory identity
+# data only. Configure and Retry must not restore the initially requested true
+# preference after this invocation deferred another account's logon tasks.
+Reset-FakeTaskState
+$script:TargetUserName = "Fixture\TargetUser"
+$elevatedIdentity = [pscustomobject]@{
+    User = [pscustomobject]@{ Value = "S-1-5-18" }
+}
+$alternateAdminGuard = $ast.Find({
+    param($node)
+    $node -is [Management.Automation.Language.IfStatementAst] -and
+        $node.Extent.Text.Contains('$elevatedIdentity.User.Value') -and
+        $node.Extent.Text.Contains('alternate administrator credentials')
+}, $true)
+if (-not $alternateAdminGuard) { throw "The alternate-administrator policy guard is missing." }
+Invoke-Expression $alternateAdminGuard.Extent.Text
+Assert-Equal $script:RunAtStartupEnabled $false "Alternate-admin startup was not deferred."
+Assert-Equal $script:RequestedRunAtStartupEnabled $false "Configure could undo alternate-admin deferral."
+Configure-StartupTasksForSetup $viiperPath $ds4Path
+Configure-StartupTasksForSetup $viiperPath $ds4Path
+Assert-Equal $script:RegisterCalls 0 "Configure/Retry registered startup under alternate administrator credentials."
+Assert-Equal $script:RunAtStartupEnabled $false "Configure/Retry re-enabled deferred alternate-admin startup."
+Assert-Equal $script:StartupTaskFallbackActive $false "Intentional alternate-admin deferral was treated as a provider failure."
+
 if ($backendText.Contains('DS4Windows.RunVIIPER') -or $backendText.Contains('DS4Windows.RunDS4Windows')) {
     throw "Setup introduced alternate task names."
 }

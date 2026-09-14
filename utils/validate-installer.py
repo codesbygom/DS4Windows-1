@@ -594,7 +594,11 @@ def main() -> int:
         "ShowFailure(1638",
         "Interlocked.CompareExchange(ref planStarted, 1, 0)",
         'engine.SetVariableString("SetupCorrelationId"',
-        'Path.Combine(Environment.SystemDirectory, "schtasks.exe")',
+        'Type.GetTypeFromProgID("Schedule.Service")',
+        'GetTask("RunDS4Windows")',
+        'InstallerStartupTaskPolicy.IsManaged(xml,',
+        'running != null && WaitForInstalledDs4Process(executable)',
+        'if (TryRunInstalledDs4Task(path)) return;',
     ]:
         if contract not in bootstrapper:
             raise SystemExit(
