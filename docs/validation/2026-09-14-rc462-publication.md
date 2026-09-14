@@ -31,7 +31,7 @@ Changes and compatibility limits are in the [tagged release notes](https://githu
 | Updater `DS4Updater.exe` (x64) | 71742432 | `F038106ADD2E33B03EA5689A87FAB9AAB76C01C4E2AC2CDC5C07A5F3C012ACE1` |
 | Updater `DS4Updater_x86.exe` | 66158910 | `5C5A1C6BCB39FB4BE3947E4A284B9918E76B9BBCC0ABBD4465CD7443DBBD2DB5` |
 
-All 13 DS4Windows assets match the exact-source successful build receipt, GitHub asset digests/sizes, Actions uploader, release ID and tag. The two source archive comments identify their corresponding commits. Both changelog sources and the added MIT notice match the tagged Git blobs, permitting only Git's CRLF-to-LF text-export normalization where required.
+The 12 receipt-listed assets match the successful exact-source build receipt; all 13 assets, including that receipt, match GitHub digests/sizes, Actions uploader, release ID and tag. The two source archive comments identify their corresponding commits. Both changelog sources and the added MIT notice match the tagged Git blobs, permitting only Git's CRLF-to-LF text-export normalization where required.
 
 - Portable package: **554 files**, 297 dependency assets and 23 application satellite assemblies. The EXE, DLL and application satellites carry `5.0.8.0`; application release identity is `VIIPERRC4.6.2`.
 - Against the published RC4.6.1 package, 503 unchanged binary assets were hash-matched and 14 text assets content-verified; the additional MIT notice is explicitly required and source-bound.
