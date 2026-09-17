@@ -523,6 +523,12 @@
 		<EmbeddedResource Update="Properties\Resources.fa.resx">
 			<DependentUpon>Resources.resx</DependentUpon>
 		</EmbeddedResource>
+		<EmbeddedResource Update="Properties\Resources.ar.resx">
+			<DependentUpon>Resources.resx</DependentUpon>
+		</EmbeddedResource>
+		<EmbeddedResource Update="Properties\Resources.he.resx">
+			<DependentUpon>Resources.resx</DependentUpon>
+		</EmbeddedResource>
 	</ItemGroup>
 
 	<ItemGroup>
