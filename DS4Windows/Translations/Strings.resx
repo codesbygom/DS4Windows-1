@@ -3458,4 +3458,205 @@ Scan Code: Keys are interpreted differently. May be needed for certain games
   <data name="BindingWin.RightArrowKey" xml:space="preserve">
     <value>R →</value>
   </data>
+  <data name="Overview" xml:space="preserve">
+    <value>Overview</value>
+  </data>
+  <data name="General" xml:space="preserve">
+    <value>General</value>
+  </data>
+  <data name="Refresh" xml:space="preserve">
+    <value>Refresh</value>
+  </data>
+  <data name="Ping" xml:space="preserve">
+    <value>Ping</value>
+  </data>
+  <data name="Time" xml:space="preserve">
+    <value>Time</value>
+  </data>
+  <data name="Data" xml:space="preserve">
+    <value>Data</value>
+  </data>
+  <data name="MainWin.RightClickDisconnectWirelessTip" xml:space="preserve">
+    <value>Right click to disconnect wireless</value>
+  </data>
+  <data name="MainWin.LinkProfileTip" xml:space="preserve">
+    <value>Use the same profile whenever this physical controller reconnects.</value>
+  </data>
+  <data name="MainWin.JoyConHoldLabel" xml:space="preserve">
+    <value>JOY-CON HOLD</value>
+  </data>
+  <data name="MainWin.IdentifyLabel" xml:space="preserve">
+    <value>IDENTIFY</value>
+  </data>
+  <data name="MainWin.PingTip" xml:space="preserve">
+    <value>Vibrate this controller so you can tell which one it is.</value>
+  </data>
+  <data name="MainWin.LightbarSectionLabel" xml:space="preserve">
+    <value>LIGHTBAR</value>
+  </data>
+  <data name="MainWin.LightbarColorTip" xml:space="preserve">
+    <value>Choose a temporary lightbar color</value>
+  </data>
+  <data name="MainWin.YourProfilesTitle" xml:space="preserve">
+    <value>Your profiles</value>
+  </data>
+  <data name="MainWin.YourProfilesDesc" xml:space="preserve">
+    <value>Select a profile for actions, or double-click a card to edit it.</value>
+  </data>
+  <data name="MainWin.SearchProfilesTip" xml:space="preserve">
+    <value>Search profiles by name</value>
+  </data>
+  <data name="MainWin.ClearSearchTip" xml:space="preserve">
+    <value>Clear search</value>
+  </data>
+  <data name="MainWin.ProfileInitial" xml:space="preserve">
+    <value>P</value>
+  </data>
+  <data name="MainWin.ControllerProfileLabel" xml:space="preserve">
+    <value>Controller profile</value>
+  </data>
+  <data name="MainWin.NoProfilesYetTitle" xml:space="preserve">
+    <value>No profiles yet</value>
+  </data>
+  <data name="MainWin.NoProfilesYetDesc" xml:space="preserve">
+    <value>Create or import a profile to get started.</value>
+  </data>
+  <data name="MainWin.LoadingProfileEditorTitle" xml:space="preserve">
+    <value>Loading profile editor</value>
+  </data>
+  <data name="MainWin.LoadingProfileEditorDesc" xml:space="preserve">
+    <value>Applying the profile and preparing its controls...</value>
+  </data>
+  <data name="MainWin.GeneralSectionDesc" xml:space="preserve">
+    <value>Startup, notifications, charging, appearance, and update behavior used by most players.</value>
+  </data>
+  <data name="MainWin.HideDS4ControllerTip" xml:space="preserve">
+    <value>Prevents games from seeing both the physical controller and its virtual output. HidHide is recommended on current Windows versions.</value>
+  </data>
+  <data name="MainWin.ReclaimSteamInputLabel" xml:space="preserve">
+    <value>Reclaim controller from Steam Input automatically</value>
+  </data>
+  <data name="MainWin.ReclaimSteamInputTip" xml:space="preserve">
+    <value>Cloaks the physical controller with HidHide, then safely restarts only its HID collection so Steam releases any handle it opened first. The virtual controller remains available to games.</value>
+  </data>
+  <data name="MainWin.ConfigSwipeProfilesTip" xml:space="preserve">
+    <value>Choose which profiles the two-finger swipe is allowed to switch between</value>
+  </data>
+  <data name="MainWin.RunAtStartupTip" xml:space="preserve">
+    <value>Choose whether DS4Windows should open when you sign in to Windows. If setup is pending, your choice is saved and the message below explains the next step.</value>
+  </data>
+  <data name="MainWin.DisconnectBTStopTip" xml:space="preserve">
+    <value>Disconnect Bluetooth controllers when the DS4Windows service is stopped.</value>
+  </data>
+  <data name="MainWin.StartMinimizedTip" xml:space="preserve">
+    <value>Open DS4Windows quietly without showing the main window.</value>
+  </data>
+  <data name="MainWin.VerboseStartupLoggingLabel" xml:space="preserve">
+    <value>Verbose logging</value>
+  </data>
+  <data name="MainWin.VerboseStartupLoggingTip" xml:space="preserve">
+    <value>Writes detailed diagnostic markers to the log. Disable after testing.</value>
+  </data>
+  <data name="MainWin.CheckUpdateStartupTip" xml:space="preserve">
+    <value>Periodically check GitHub for a newer DS4Windows release.</value>
+  </data>
+  <data name="MainWin.AdvancedSettingsHeader" xml:space="preserve">
+    <value>Advanced settings</value>
+  </data>
+  <data name="MainWin.AdvancedSectionDesc" xml:space="preserve">
+    <value>Network servers, compatibility overrides, device registration, diagnostics, and maintenance tools. Defaults are best for most users.</value>
+  </data>
+  <data name="MainWin.SupportDS4WindowsTitle" xml:space="preserve">
+    <value>Support DS4Windows</value>
+  </data>
+  <data name="MainWin.SupportDS4WindowsDesc" xml:space="preserve">
+    <value>Help fund controller hardware, testing, and development.</value>
+  </data>
+  <data name="ViiperSettings.SectionHeader" xml:space="preserve">
+    <value>VIIPER Virtual Controller Support</value>
+  </data>
+  <data name="ViiperSettings.StatusUnknown" xml:space="preserve">
+    <value>VIIPER status unknown</value>
+  </data>
+  <data name="ViiperSettings.InstallRepairButton" xml:space="preserve">
+    <value>Install / Repair VIIPER</value>
+  </data>
+  <data name="ViiperSettings.RequiredOutputsNote" xml:space="preserve">
+    <value>Required for VIIPER outputs: DualSense, DualSense Edge, Switch 2 Pro, DS4, Xbox 360, and Xbox One / Series over USB/IP.</value>
+  </data>
+  <data name="ViiperSettings.PromptMeLabel" xml:space="preserve">
+    <value>Prompt me when VIIPER needs setup</value>
+  </data>
+  <data name="ViiperSettings.PromptMeTip" xml:space="preserve">
+    <value>Turn this off to suppress automatic VIIPER setup prompts. Install / Repair and Refresh remain available here.</value>
+  </data>
+  <data name="Switch2Settings.SectionHeader" xml:space="preserve">
+    <value>Switch 2 wireless controllers</value>
+  </data>
+  <data name="Switch2Settings.SyncInstructions" xml:space="preserve">
+    <value>Hold the controller’s sync button until its lights flash, then select it below. Controllers you have already added reconnect when you wake them.</value>
+  </data>
+  <data name="Switch2Settings.AutoJoyConPairingLabel" xml:space="preserve">
+    <value>Joy-Cons are automatically paired</value>
+  </data>
+  <data name="Switch2Settings.AutoJoyConPairingTip" xml:space="preserve">
+    <value>Join available left and right Joy-Cons into one controller. A Joy-Con on its own still works separately.</value>
+  </data>
+  <data name="Switch2Settings.DiscoveryStatusDefault" xml:space="preserve">
+    <value>Refresh to check Bluetooth discovery status.</value>
+  </data>
+  <data name="Switch2Settings.AddControllerButton" xml:space="preserve">
+    <value>Add controller</value>
+  </data>
+  <data name="Switch2Settings.JoinJoyConsTitle" xml:space="preserve">
+    <value>Join Joy-Cons</value>
+  </data>
+  <data name="Switch2Settings.JoinJoyConsDesc" xml:space="preserve">
+    <value>Each Joy-Con works on its own. To join two, select them here or use their link buttons on the Controllers tab.</value>
+  </data>
+  <data name="Switch2Settings.NoUnmatchedJoyCon2" xml:space="preserve">
+    <value>No unmatched Joy-Con 2 connections have been observed yet.</value>
+  </data>
+  <data name="Switch2Settings.LeftJoyCon2Label" xml:space="preserve">
+    <value>Left Joy-Con 2</value>
+  </data>
+  <data name="Switch2Settings.RightJoyCon2Label" xml:space="preserve">
+    <value>Right Joy-Con 2</value>
+  </data>
+  <data name="Switch2Settings.JoinSelectedPairButton" xml:space="preserve">
+    <value>Join selected Joy-Con 2 pair</value>
+  </data>
+  <data name="Switch2Settings.UseSelectedLeftButton" xml:space="preserve">
+    <value>Use selected left separately</value>
+  </data>
+  <data name="Switch2Settings.UseSelectedRightButton" xml:space="preserve">
+    <value>Use selected right separately</value>
+  </data>
+  <data name="Switch2Settings.UnmatchedJoyCon2Label" xml:space="preserve">
+    <value>UNMATCHED JOY-CON 2</value>
+  </data>
+  <data name="Switch2Settings.ManualLinkInstructions" xml:space="preserve">
+    <value>Click Link on one Joy-Con, then Link on the other. The first controller keeps its profile and virtual pad.</value>
+  </data>
+  <data name="DsxSettings.SectionHeader" xml:space="preserve">
+    <value>Game mod support (DSX)</value>
+  </data>
+  <data name="DsxSettings.EnableLabel" xml:space="preserve">
+    <value>Let game mods control triggers and lights</value>
+  </data>
+  <data name="DsxSettings.Description" xml:space="preserve">
+    <value>For compatible DSX game mods on this PC and a DualSense or DualSense Edge. Trigger Lab takes priority on each trigger you enable. This does not stream audio haptics.</value>
+  </data>
+  <data name="DsxSettings.ConnectionDetailsHeader" xml:space="preserve">
+    <value>Connection details</value>
+  </data>
+  <data name="DsxSettings.ConnectionDetailsDesc" xml:space="preserve">
+    <value>Use the same address and port in your mod. Most mods use 127.0.0.1 and port 6969. Close DSX or another listener using that port first.</value>
+  </data>
+  <data name="DsxSettings.ThisPcAddressLabel" xml:space="preserve">
+    <value>This PC address</value>
+  </data>
+  <data name="DsxSettings.ApplyRetryButton" xml:space="preserve">
+    <value>Apply / Retry</value>
+  </data>
 </root>

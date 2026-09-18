@@ -1883,4 +1883,205 @@ Gryo معين كفأرة</value>
   <data name="BindingWin.RightArrowKey" xml:space="preserve">
     <value>R →</value>
   </data>
+  <data name="Overview" xml:space="preserve">
+    <value>نظرة عامة</value>
+  </data>
+  <data name="General" xml:space="preserve">
+    <value>عام</value>
+  </data>
+  <data name="Refresh" xml:space="preserve">
+    <value>تحديث</value>
+  </data>
+  <data name="Ping" xml:space="preserve">
+    <value>Ping</value>
+  </data>
+  <data name="Time" xml:space="preserve">
+    <value>الوقت</value>
+  </data>
+  <data name="Data" xml:space="preserve">
+    <value>البيانات</value>
+  </data>
+  <data name="MainWin.RightClickDisconnectWirelessTip" xml:space="preserve">
+    <value>انقر بزر الفأرة الأيمن لفصل الاتصال اللاسلكي</value>
+  </data>
+  <data name="MainWin.LinkProfileTip" xml:space="preserve">
+    <value>استخدام نفس ملف التعريف في كل مرة تُعاد فيها توصيل يد التحكم الفعلية هذه.</value>
+  </data>
+  <data name="MainWin.JoyConHoldLabel" xml:space="preserve">
+    <value>وضع إمساك Joy-Con</value>
+  </data>
+  <data name="MainWin.IdentifyLabel" xml:space="preserve">
+    <value>تعريف</value>
+  </data>
+  <data name="MainWin.PingTip" xml:space="preserve">
+    <value>يهتز مقبض التحكم هذا لتتمكن من تمييزه عن غيره.</value>
+  </data>
+  <data name="MainWin.LightbarSectionLabel" xml:space="preserve">
+    <value>شريط الإضاءة</value>
+  </data>
+  <data name="MainWin.LightbarColorTip" xml:space="preserve">
+    <value>اختر لوناً مؤقتاً لشريط الإضاءة</value>
+  </data>
+  <data name="MainWin.YourProfilesTitle" xml:space="preserve">
+    <value>ملفات التعريف الخاصة بك</value>
+  </data>
+  <data name="MainWin.YourProfilesDesc" xml:space="preserve">
+    <value>حدد ملف تعريف لتنفيذ إجراءات، أو انقر نقراً مزدوجاً على البطاقة لتحريره.</value>
+  </data>
+  <data name="MainWin.SearchProfilesTip" xml:space="preserve">
+    <value>البحث عن ملفات التعريف بالاسم</value>
+  </data>
+  <data name="MainWin.ClearSearchTip" xml:space="preserve">
+    <value>مسح البحث</value>
+  </data>
+  <data name="MainWin.ProfileInitial" xml:space="preserve">
+    <value>P</value>
+  </data>
+  <data name="MainWin.ControllerProfileLabel" xml:space="preserve">
+    <value>ملف تعريف يد التحكم</value>
+  </data>
+  <data name="MainWin.NoProfilesYetTitle" xml:space="preserve">
+    <value>لا توجد ملفات تعريف بعد</value>
+  </data>
+  <data name="MainWin.NoProfilesYetDesc" xml:space="preserve">
+    <value>أنشئ أو استورد ملف تعريف للبدء.</value>
+  </data>
+  <data name="MainWin.LoadingProfileEditorTitle" xml:space="preserve">
+    <value>جارٍ تحميل محرر ملف التعريف</value>
+  </data>
+  <data name="MainWin.LoadingProfileEditorDesc" xml:space="preserve">
+    <value>جارٍ تطبيق ملف التعريف وتجهيز عناصر التحكم الخاصة به...</value>
+  </data>
+  <data name="MainWin.GeneralSectionDesc" xml:space="preserve">
+    <value>إعدادات بدء التشغيل والإشعارات والشحن والمظهر وسلوك التحديث التي يستخدمها معظم اللاعبين.</value>
+  </data>
+  <data name="MainWin.HideDS4ControllerTip" xml:space="preserve">
+    <value>يمنع الألعاب من رؤية يد التحكم الفعلية وناتجها الافتراضي معاً. يُنصح باستخدام HidHide في إصدارات Windows الحالية.</value>
+  </data>
+  <data name="MainWin.ReclaimSteamInputLabel" xml:space="preserve">
+    <value>استعادة يد التحكم من Steam Input تلقائياً</value>
+  </data>
+  <data name="MainWin.ReclaimSteamInputTip" xml:space="preserve">
+    <value>يُخفي يد التحكم الفعلية باستخدام HidHide، ثم يعيد تشغيل مجموعة HID الخاصة بها فقط وبأمان حتى يُحرر Steam أي مقبض (handle) فتحه مسبقاً. تبقى يد التحكم الافتراضية متاحة للألعاب.</value>
+  </data>
+  <data name="MainWin.ConfigSwipeProfilesTip" xml:space="preserve">
+    <value>اختر ملفات التعريف التي يُسمح لسحبة الإصبعين بالتبديل بينها</value>
+  </data>
+  <data name="MainWin.RunAtStartupTip" xml:space="preserve">
+    <value>اختر ما إذا كان يجب فتح DS4Windows عند تسجيل الدخول إلى Windows. إذا كان الإعداد معلقاً، يُحفظ اختيارك وتوضح الرسالة أدناه الخطوة التالية.</value>
+  </data>
+  <data name="MainWin.DisconnectBTStopTip" xml:space="preserve">
+    <value>قطع اتصال أجهزة التحكم عبر البلوتوث عند إيقاف خدمة DS4Windows.</value>
+  </data>
+  <data name="MainWin.StartMinimizedTip" xml:space="preserve">
+    <value>فتح DS4Windows بهدوء دون إظهار النافذة الرئيسية.</value>
+  </data>
+  <data name="MainWin.VerboseStartupLoggingLabel" xml:space="preserve">
+    <value>تسجيل مفصّل (Verbose)</value>
+  </data>
+  <data name="MainWin.VerboseStartupLoggingTip" xml:space="preserve">
+    <value>يكتب علامات تشخيصية مفصّلة في السجل. عطّله بعد الانتهاء من الاختبار.</value>
+  </data>
+  <data name="MainWin.CheckUpdateStartupTip" xml:space="preserve">
+    <value>التحقق الدوري من GitHub بحثاً عن إصدار أحدث من DS4Windows.</value>
+  </data>
+  <data name="MainWin.AdvancedSettingsHeader" xml:space="preserve">
+    <value>الإعدادات المتقدمة</value>
+  </data>
+  <data name="MainWin.AdvancedSectionDesc" xml:space="preserve">
+    <value>خوادم الشبكة وتجاوزات التوافق وتسجيل الأجهزة والتشخيص وأدوات الصيانة. الإعدادات الافتراضية هي الأنسب لمعظم المستخدمين.</value>
+  </data>
+  <data name="MainWin.SupportDS4WindowsTitle" xml:space="preserve">
+    <value>دعم DS4Windows</value>
+  </data>
+  <data name="MainWin.SupportDS4WindowsDesc" xml:space="preserve">
+    <value>ساهم في تمويل أجهزة التحكم واختبارها وتطويرها.</value>
+  </data>
+  <data name="ViiperSettings.SectionHeader" xml:space="preserve">
+    <value>دعم يد التحكم الافتراضية VIIPER</value>
+  </data>
+  <data name="ViiperSettings.StatusUnknown" xml:space="preserve">
+    <value>حالة VIIPER غير معروفة</value>
+  </data>
+  <data name="ViiperSettings.InstallRepairButton" xml:space="preserve">
+    <value>تثبيت / إصلاح VIIPER</value>
+  </data>
+  <data name="ViiperSettings.RequiredOutputsNote" xml:space="preserve">
+    <value>مطلوب لمخرجات VIIPER: DualSense وDualSense Edge وSwitch 2 Pro وDS4 وXbox 360 وXbox One / Series عبر USB/IP.</value>
+  </data>
+  <data name="ViiperSettings.PromptMeLabel" xml:space="preserve">
+    <value>تنبيهي عندما يحتاج VIIPER إلى الإعداد</value>
+  </data>
+  <data name="ViiperSettings.PromptMeTip" xml:space="preserve">
+    <value>أوقف هذا الخيار لإيقاف تنبيهات إعداد VIIPER التلقائية. يبقى خيارا التثبيت/الإصلاح والتحديث متاحين هنا.</value>
+  </data>
+  <data name="Switch2Settings.SectionHeader" xml:space="preserve">
+    <value>أجهزة تحكم Switch 2 اللاسلكية</value>
+  </data>
+  <data name="Switch2Settings.SyncInstructions" xml:space="preserve">
+    <value>اضغط مطولاً على زر المزامنة (sync) في يد التحكم حتى تومض أضواؤها، ثم حددها أدناه. أجهزة التحكم التي أضفتها مسبقاً تُعاد توصيلها عند تنشيطها.</value>
+  </data>
+  <data name="Switch2Settings.AutoJoyConPairingLabel" xml:space="preserve">
+    <value>يتم إقران أجهزة Joy-Con تلقائياً</value>
+  </data>
+  <data name="Switch2Settings.AutoJoyConPairingTip" xml:space="preserve">
+    <value>دمج أجهزة Joy-Con اليسرى واليمنى المتاحة في يد تحكم واحدة. يستمر جهاز Joy-Con المنفرد بالعمل بشكل منفصل.</value>
+  </data>
+  <data name="Switch2Settings.DiscoveryStatusDefault" xml:space="preserve">
+    <value>اضغط تحديث للتحقق من حالة اكتشاف البلوتوث.</value>
+  </data>
+  <data name="Switch2Settings.AddControllerButton" xml:space="preserve">
+    <value>إضافة يد تحكم</value>
+  </data>
+  <data name="Switch2Settings.JoinJoyConsTitle" xml:space="preserve">
+    <value>دمج أجهزة Joy-Con</value>
+  </data>
+  <data name="Switch2Settings.JoinJoyConsDesc" xml:space="preserve">
+    <value>يعمل كل Joy-Con بمفرده. لدمج اثنين، حددهما هنا أو استخدم أزرار الربط (Link) في تبويب Controllers.</value>
+  </data>
+  <data name="Switch2Settings.NoUnmatchedJoyCon2" xml:space="preserve">
+    <value>لم يتم رصد أي اتصالات Joy-Con 2 غير مُقترنة حتى الآن.</value>
+  </data>
+  <data name="Switch2Settings.LeftJoyCon2Label" xml:space="preserve">
+    <value>Joy-Con 2 الأيسر</value>
+  </data>
+  <data name="Switch2Settings.RightJoyCon2Label" xml:space="preserve">
+    <value>Joy-Con 2 الأيمن</value>
+  </data>
+  <data name="Switch2Settings.JoinSelectedPairButton" xml:space="preserve">
+    <value>دمج زوج Joy-Con 2 المحدد</value>
+  </data>
+  <data name="Switch2Settings.UseSelectedLeftButton" xml:space="preserve">
+    <value>استخدام اليسار المحدد بشكل منفصل</value>
+  </data>
+  <data name="Switch2Settings.UseSelectedRightButton" xml:space="preserve">
+    <value>استخدام اليمين المحدد بشكل منفصل</value>
+  </data>
+  <data name="Switch2Settings.UnmatchedJoyCon2Label" xml:space="preserve">
+    <value>Joy-Con 2 غير مُقترن</value>
+  </data>
+  <data name="Switch2Settings.ManualLinkInstructions" xml:space="preserve">
+    <value>انقر على Link لأحد أجهزة Joy-Con، ثم على Link للآخر. تحتفظ يد التحكم الأولى بملف تعريفها ولوحتها الافتراضية.</value>
+  </data>
+  <data name="DsxSettings.SectionHeader" xml:space="preserve">
+    <value>دعم تعديلات الألعاب (DSX)</value>
+  </data>
+  <data name="DsxSettings.EnableLabel" xml:space="preserve">
+    <value>السماح لتعديلات اللعبة بالتحكم في الزناد والأضواء</value>
+  </data>
+  <data name="DsxSettings.Description" xml:space="preserve">
+    <value>لتعديلات ألعاب DSX المتوافقة على هذا الحاسوب مع DualSense أو DualSense Edge. يحظى Trigger Lab بالأولوية على كل زناد تُفعّله. لا يبث هذا الخيار الـ audio haptics.</value>
+  </data>
+  <data name="DsxSettings.ConnectionDetailsHeader" xml:space="preserve">
+    <value>تفاصيل الاتصال</value>
+  </data>
+  <data name="DsxSettings.ConnectionDetailsDesc" xml:space="preserve">
+    <value>استخدم نفس العنوان والمنفذ في تعديلك. تستخدم معظم التعديلات 127.0.0.1 والمنفذ 6969. أغلق DSX أو أي مستمع آخر يستخدم هذا المنفذ أولاً.</value>
+  </data>
+  <data name="DsxSettings.ThisPcAddressLabel" xml:space="preserve">
+    <value>عنوان هذا الحاسوب</value>
+  </data>
+  <data name="DsxSettings.ApplyRetryButton" xml:space="preserve">
+    <value>تطبيق / إعادة المحاولة</value>
+  </data>
 </root>

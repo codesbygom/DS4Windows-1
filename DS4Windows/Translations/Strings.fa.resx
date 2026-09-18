@@ -3479,4 +3479,205 @@ Scan Code: کلیدها جور دیگه‌ای تفسیر می‌شن. ممکن�
   <data name="BindingWin.RightArrowKey" xml:space="preserve">
     <value>R →</value>
   </data>
+  <data name="Overview" xml:space="preserve">
+    <value>نمای کلی</value>
+  </data>
+  <data name="General" xml:space="preserve">
+    <value>عمومی</value>
+  </data>
+  <data name="Refresh" xml:space="preserve">
+    <value>بازخوانی</value>
+  </data>
+  <data name="Ping" xml:space="preserve">
+    <value>پینگ</value>
+  </data>
+  <data name="Time" xml:space="preserve">
+    <value>زمان</value>
+  </data>
+  <data name="Data" xml:space="preserve">
+    <value>داده</value>
+  </data>
+  <data name="MainWin.RightClickDisconnectWirelessTip" xml:space="preserve">
+    <value>برای قطع اتصال بی‌سیم راست‌کلیک کن</value>
+  </data>
+  <data name="MainWin.LinkProfileTip" xml:space="preserve">
+    <value>هر بار که این کنترلر فیزیکی دوباره وصل می‌شه، همین پروفایل استفاده بشه.</value>
+  </data>
+  <data name="MainWin.JoyConHoldLabel" xml:space="preserve">
+    <value>حالت نگه‌داشتن جوی-کان</value>
+  </data>
+  <data name="MainWin.IdentifyLabel" xml:space="preserve">
+    <value>شناسایی</value>
+  </data>
+  <data name="MainWin.PingTip" xml:space="preserve">
+    <value>این کنترلر رو می‌لرزونه تا بتونی تشخیص بدی کدومه.</value>
+  </data>
+  <data name="MainWin.LightbarSectionLabel" xml:space="preserve">
+    <value>نوار نور</value>
+  </data>
+  <data name="MainWin.LightbarColorTip" xml:space="preserve">
+    <value>یه رنگ موقت برای نوار نور انتخاب کن</value>
+  </data>
+  <data name="MainWin.YourProfilesTitle" xml:space="preserve">
+    <value>پروفایل‌های تو</value>
+  </data>
+  <data name="MainWin.YourProfilesDesc" xml:space="preserve">
+    <value>یه پروفایل رو برای عملیات‌ها انتخاب کن، یا روی کارتش دابل‌کلیک کن تا ویرایشش کنی.</value>
+  </data>
+  <data name="MainWin.SearchProfilesTip" xml:space="preserve">
+    <value>جستجوی پروفایل‌ها بر اساس نام</value>
+  </data>
+  <data name="MainWin.ClearSearchTip" xml:space="preserve">
+    <value>پاک کردن جستجو</value>
+  </data>
+  <data name="MainWin.ProfileInitial" xml:space="preserve">
+    <value>P</value>
+  </data>
+  <data name="MainWin.ControllerProfileLabel" xml:space="preserve">
+    <value>پروفایل کنترلر</value>
+  </data>
+  <data name="MainWin.NoProfilesYetTitle" xml:space="preserve">
+    <value>هنوز پروفایلی نیست</value>
+  </data>
+  <data name="MainWin.NoProfilesYetDesc" xml:space="preserve">
+    <value>برای شروع، یه پروفایل بساز یا وارد کن.</value>
+  </data>
+  <data name="MainWin.LoadingProfileEditorTitle" xml:space="preserve">
+    <value>در حال بارگذاری ادیتور پروفایل</value>
+  </data>
+  <data name="MainWin.LoadingProfileEditorDesc" xml:space="preserve">
+    <value>در حال اعمال پروفایل و آماده‌سازی کنترل‌هاش...</value>
+  </data>
+  <data name="MainWin.GeneralSectionDesc" xml:space="preserve">
+    <value>اجرای خودکار، اعلان‌ها، شارژ، ظاهر برنامه و رفتار به‌روزرسانی که اکثر کاربرها استفاده می‌کنن.</value>
+  </data>
+  <data name="MainWin.HideDS4ControllerTip" xml:space="preserve">
+    <value>باعث می‌شه بازی‌ها هم کنترلر فیزیکی و هم خروجی مجازیش رو هم‌زمان نبینن. توی نسخه‌های فعلی ویندوز، استفاده از HidHide توصیه می‌شه.</value>
+  </data>
+  <data name="MainWin.ReclaimSteamInputLabel" xml:space="preserve">
+    <value>پس‌گرفتن خودکار کنترلر از Steam Input</value>
+  </data>
+  <data name="MainWin.ReclaimSteamInputTip" xml:space="preserve">
+    <value>کنترلر فیزیکی رو با HidHide مخفی می‌کنه، بعد فقط مجموعه‌ی HID اون رو با خیال راحت ری‌استارت می‌کنه تا Steam هر handle‌ای که قبلاً باز کرده رو آزاد کنه. کنترلر مجازی همچنان در دسترس بازی‌ها می‌مونه.</value>
+  </data>
+  <data name="MainWin.ConfigSwipeProfilesTip" xml:space="preserve">
+    <value>انتخاب کن سوایپ دوانگشتی بین کدوم پروفایل‌ها اجازه‌ی سوییچ داره</value>
+  </data>
+  <data name="MainWin.RunAtStartupTip" xml:space="preserve">
+    <value>انتخاب کن که DS4Windows موقع ورود به ویندوز باز بشه یا نه. اگه راه‌اندازی هنوز کامل نشده، انتخابت ذخیره می‌شه و پیام زیر مرحله‌ی بعدی رو توضیح می‌ده.</value>
+  </data>
+  <data name="MainWin.DisconnectBTStopTip" xml:space="preserve">
+    <value>با متوقف شدن سرویس DS4Windows، کنترلرهای بلوتوثی قطع بشن.</value>
+  </data>
+  <data name="MainWin.StartMinimizedTip" xml:space="preserve">
+    <value>DS4Windows رو بی‌سروصدا باز کن بدون نشون‌دادن پنجره‌ی اصلی.</value>
+  </data>
+  <data name="MainWin.VerboseStartupLoggingLabel" xml:space="preserve">
+    <value>ثبت گزارش کامل (verbose)</value>
+  </data>
+  <data name="MainWin.VerboseStartupLoggingTip" xml:space="preserve">
+    <value>نشانه‌های عیب‌یابی دقیق رو توی لاگ ثبت می‌کنه. بعد از تست، غیرفعالش کن.</value>
+  </data>
+  <data name="MainWin.CheckUpdateStartupTip" xml:space="preserve">
+    <value>به‌صورت دوره‌ای GitHub رو برای نسخه‌ی جدیدتر DS4Windows بررسی کن.</value>
+  </data>
+  <data name="MainWin.AdvancedSettingsHeader" xml:space="preserve">
+    <value>تنظیمات پیشرفته</value>
+  </data>
+  <data name="MainWin.AdvancedSectionDesc" xml:space="preserve">
+    <value>سرورهای شبکه، بازنویسی‌های سازگاری، ثبت دستگاه، عیب‌یابی و ابزارهای نگه‌داری. تنظیمات پیش‌فرض برای اکثر کاربرها بهترینه.</value>
+  </data>
+  <data name="MainWin.SupportDS4WindowsTitle" xml:space="preserve">
+    <value>حمایت از DS4Windows</value>
+  </data>
+  <data name="MainWin.SupportDS4WindowsDesc" xml:space="preserve">
+    <value>به تأمین هزینه‌ی سخت‌افزار کنترلر، تست و توسعه کمک کن.</value>
+  </data>
+  <data name="ViiperSettings.SectionHeader" xml:space="preserve">
+    <value>پشتیبانی کنترلر مجازی VIIPER</value>
+  </data>
+  <data name="ViiperSettings.StatusUnknown" xml:space="preserve">
+    <value>وضعیت VIIPER نامشخص</value>
+  </data>
+  <data name="ViiperSettings.InstallRepairButton" xml:space="preserve">
+    <value>نصب / تعمیر VIIPER</value>
+  </data>
+  <data name="ViiperSettings.RequiredOutputsNote" xml:space="preserve">
+    <value>برای خروجی‌های VIIPER لازمه: DualSense، DualSense Edge، Switch 2 Pro، DS4، Xbox 360 و Xbox One / Series روی USB/IP.</value>
+  </data>
+  <data name="ViiperSettings.PromptMeLabel" xml:space="preserve">
+    <value>وقتی VIIPER نیاز به راه‌اندازی داره بهم اطلاع بده</value>
+  </data>
+  <data name="ViiperSettings.PromptMeTip" xml:space="preserve">
+    <value>برای غیرفعال‌کردن پیام‌های خودکار راه‌اندازی VIIPER، این گزینه رو خاموش کن. نصب/تعمیر و بازخوانی همچنان از همین‌جا در دسترسن.</value>
+  </data>
+  <data name="Switch2Settings.SectionHeader" xml:space="preserve">
+    <value>کنترلرهای بی‌سیم Switch 2</value>
+  </data>
+  <data name="Switch2Settings.SyncInstructions" xml:space="preserve">
+    <value>دکمه‌ی sync کنترلر رو نگه دار تا چراغ‌هاش چشمک بزنه، بعد از پایین انتخابش کن. کنترلرهایی که قبلاً اضافه کردی، با روشن‌شدن دوباره وصل می‌شن.</value>
+  </data>
+  <data name="Switch2Settings.AutoJoyConPairingLabel" xml:space="preserve">
+    <value>جوی-کان‌ها به‌صورت خودکار جفت می‌شن</value>
+  </data>
+  <data name="Switch2Settings.AutoJoyConPairingTip" xml:space="preserve">
+    <value>جوی-کان‌های چپ و راستِ در دسترس رو توی یه کنترلر یکی می‌کنه. یه جوی-کان تنها، همچنان به‌صورت جداگانه کار می‌کنه.</value>
+  </data>
+  <data name="Switch2Settings.DiscoveryStatusDefault" xml:space="preserve">
+    <value>برای بررسی وضعیت شناسایی بلوتوث، بازخوانی کن.</value>
+  </data>
+  <data name="Switch2Settings.AddControllerButton" xml:space="preserve">
+    <value>افزودن کنترلر</value>
+  </data>
+  <data name="Switch2Settings.JoinJoyConsTitle" xml:space="preserve">
+    <value>یکی‌کردن جوی-کان‌ها</value>
+  </data>
+  <data name="Switch2Settings.JoinJoyConsDesc" xml:space="preserve">
+    <value>هر جوی-کان به‌تنهایی کار می‌کنه. برای یکی‌کردن دوتاش، از همین‌جا انتخابشون کن یا از دکمه‌های Link توی تب Controllers استفاده کن.</value>
+  </data>
+  <data name="Switch2Settings.NoUnmatchedJoyCon2" xml:space="preserve">
+    <value>هنوز هیچ اتصال جوی-کان ۲ جفت‌نشده‌ای دیده نشده.</value>
+  </data>
+  <data name="Switch2Settings.LeftJoyCon2Label" xml:space="preserve">
+    <value>جوی-کان ۲ چپ</value>
+  </data>
+  <data name="Switch2Settings.RightJoyCon2Label" xml:space="preserve">
+    <value>جوی-کان ۲ راست</value>
+  </data>
+  <data name="Switch2Settings.JoinSelectedPairButton" xml:space="preserve">
+    <value>یکی‌کردن جفت جوی-کان ۲ انتخاب‌شده</value>
+  </data>
+  <data name="Switch2Settings.UseSelectedLeftButton" xml:space="preserve">
+    <value>استفاده از چپ انتخاب‌شده به‌صورت جداگانه</value>
+  </data>
+  <data name="Switch2Settings.UseSelectedRightButton" xml:space="preserve">
+    <value>استفاده از راست انتخاب‌شده به‌صورت جداگانه</value>
+  </data>
+  <data name="Switch2Settings.UnmatchedJoyCon2Label" xml:space="preserve">
+    <value>جوی-کان ۲ جفت‌نشده</value>
+  </data>
+  <data name="Switch2Settings.ManualLinkInstructions" xml:space="preserve">
+    <value>روی Link یکی از جوی-کان‌ها کلیک کن، بعد روی Link اون یکی. کنترلر اول پروفایل و پد مجازیش رو حفظ می‌کنه.</value>
+  </data>
+  <data name="DsxSettings.SectionHeader" xml:space="preserve">
+    <value>پشتیبانی از مادهای بازی (DSX)</value>
+  </data>
+  <data name="DsxSettings.EnableLabel" xml:space="preserve">
+    <value>به مادهای بازی اجازه بده ماشه‌ها و چراغ‌ها رو کنترل کنن</value>
+  </data>
+  <data name="DsxSettings.Description" xml:space="preserve">
+    <value>برای مادهای بازی سازگار با DSX روی همین PC و یه DualSense یا DualSense Edge. Trigger Lab روی هر ماشه‌ای که فعالش کنی اولویت داره. این گزینه audio haptics رو استریم نمی‌کنه.</value>
+  </data>
+  <data name="DsxSettings.ConnectionDetailsHeader" xml:space="preserve">
+    <value>جزئیات اتصال</value>
+  </data>
+  <data name="DsxSettings.ConnectionDetailsDesc" xml:space="preserve">
+    <value>توی مادت از همین آدرس و درگاه استفاده کن. اکثر مادها از 127.0.0.1 و درگاه 6969 استفاده می‌کنن. اول DSX یا هر listener دیگه‌ای که از این درگاه استفاده می‌کنه رو ببند.</value>
+  </data>
+  <data name="DsxSettings.ThisPcAddressLabel" xml:space="preserve">
+    <value>آدرس این PC</value>
+  </data>
+  <data name="DsxSettings.ApplyRetryButton" xml:space="preserve">
+    <value>اعمال / تلاش دوباره</value>
+  </data>
 </root>

@@ -1877,4 +1877,205 @@
   <data name="BindingWin.RightArrowKey" xml:space="preserve">
     <value>R →</value>
   </data>
+  <data name="Overview" xml:space="preserve">
+    <value>סקירה</value>
+  </data>
+  <data name="General" xml:space="preserve">
+    <value>כללי</value>
+  </data>
+  <data name="Refresh" xml:space="preserve">
+    <value>רענן</value>
+  </data>
+  <data name="Ping" xml:space="preserve">
+    <value>פינג</value>
+  </data>
+  <data name="Time" xml:space="preserve">
+    <value>זמן</value>
+  </data>
+  <data name="Data" xml:space="preserve">
+    <value>נתונים</value>
+  </data>
+  <data name="MainWin.RightClickDisconnectWirelessTip" xml:space="preserve">
+    <value>לחיצה ימנית מנתקת את החיבור האלחוטי</value>
+  </data>
+  <data name="MainWin.LinkProfileTip" xml:space="preserve">
+    <value>להשתמש תמיד באותו פרופיל כשהבקר הפיזי הזה מתחבר מחדש.</value>
+  </data>
+  <data name="MainWin.JoyConHoldLabel" xml:space="preserve">
+    <value>מצב אחיזת Joy-Con</value>
+  </data>
+  <data name="MainWin.IdentifyLabel" xml:space="preserve">
+    <value>זיהוי</value>
+  </data>
+  <data name="MainWin.PingTip" xml:space="preserve">
+    <value>מרעיד את הבקר הזה כדי שתוכל לזהות אותו.</value>
+  </data>
+  <data name="MainWin.LightbarSectionLabel" xml:space="preserve">
+    <value>פס תאורה</value>
+  </data>
+  <data name="MainWin.LightbarColorTip" xml:space="preserve">
+    <value>בחר צבע זמני לפס התאורה</value>
+  </data>
+  <data name="MainWin.YourProfilesTitle" xml:space="preserve">
+    <value>הפרופילים שלך</value>
+  </data>
+  <data name="MainWin.YourProfilesDesc" xml:space="preserve">
+    <value>בחר פרופיל לביצוע פעולות, או לחץ לחיצה כפולה על כרטיס כדי לערוך אותו.</value>
+  </data>
+  <data name="MainWin.SearchProfilesTip" xml:space="preserve">
+    <value>חיפוש פרופילים לפי שם</value>
+  </data>
+  <data name="MainWin.ClearSearchTip" xml:space="preserve">
+    <value>נקה חיפוש</value>
+  </data>
+  <data name="MainWin.ProfileInitial" xml:space="preserve">
+    <value>P</value>
+  </data>
+  <data name="MainWin.ControllerProfileLabel" xml:space="preserve">
+    <value>פרופיל בקר</value>
+  </data>
+  <data name="MainWin.NoProfilesYetTitle" xml:space="preserve">
+    <value>אין עדיין פרופילים</value>
+  </data>
+  <data name="MainWin.NoProfilesYetDesc" xml:space="preserve">
+    <value>כדי להתחיל, צור או ייבא פרופיל.</value>
+  </data>
+  <data name="MainWin.LoadingProfileEditorTitle" xml:space="preserve">
+    <value>טוען את עורך הפרופילים</value>
+  </data>
+  <data name="MainWin.LoadingProfileEditorDesc" xml:space="preserve">
+    <value>מחיל את הפרופיל ומכין את הבקרים שלו...</value>
+  </data>
+  <data name="MainWin.GeneralSectionDesc" xml:space="preserve">
+    <value>הגדרות הפעלה, התראות, טעינה, מראה והתנהגות עדכונים שרוב השחקנים משתמשים בהן.</value>
+  </data>
+  <data name="MainWin.HideDS4ControllerTip" xml:space="preserve">
+    <value>מונע מהמשחקים לראות גם את הבקר הפיזי וגם את הפלט הווירטואלי שלו יחד. מומלץ להשתמש ב-HidHide בגרסאות Windows הנוכחיות.</value>
+  </data>
+  <data name="MainWin.ReclaimSteamInputLabel" xml:space="preserve">
+    <value>השב את הבקר מ-Steam Input באופן אוטומטי</value>
+  </data>
+  <data name="MainWin.ReclaimSteamInputTip" xml:space="preserve">
+    <value>מסתיר את הבקר הפיזי באמצעות HidHide, ולאחר מכן מפעיל מחדש בבטחה רק את אוסף ה-HID שלו כדי ש-Steam ישחרר כל handle שפתח קודם. הבקר הווירטואלי נשאר זמין למשחקים.</value>
+  </data>
+  <data name="MainWin.ConfigSwipeProfilesTip" xml:space="preserve">
+    <value>בחר בין אילו פרופילים ההחלקה בשתי אצבעות רשאית לעבור</value>
+  </data>
+  <data name="MainWin.RunAtStartupTip" xml:space="preserve">
+    <value>בחר אם DS4Windows ייפתח בעת הכניסה ל-Windows. אם ההתקנה עדיין ממתינה, הבחירה שלך נשמרת וההודעה למטה מסבירה את השלב הבא.</value>
+  </data>
+  <data name="MainWin.DisconnectBTStopTip" xml:space="preserve">
+    <value>נתק בקרי Bluetooth כאשר שירות DS4Windows נעצר.</value>
+  </data>
+  <data name="MainWin.StartMinimizedTip" xml:space="preserve">
+    <value>פתח את DS4Windows בשקט מבלי להציג את החלון הראשי.</value>
+  </data>
+  <data name="MainWin.VerboseStartupLoggingLabel" xml:space="preserve">
+    <value>רישום מפורט (Verbose)</value>
+  </data>
+  <data name="MainWin.VerboseStartupLoggingTip" xml:space="preserve">
+    <value>כותב סמני אבחון מפורטים ליומן. כבה לאחר הבדיקה.</value>
+  </data>
+  <data name="MainWin.CheckUpdateStartupTip" xml:space="preserve">
+    <value>בדוק מעת לעת ב-GitHub אם קיימת גרסה חדשה יותר של DS4Windows.</value>
+  </data>
+  <data name="MainWin.AdvancedSettingsHeader" xml:space="preserve">
+    <value>הגדרות מתקדמות</value>
+  </data>
+  <data name="MainWin.AdvancedSectionDesc" xml:space="preserve">
+    <value>שרתי רשת, דריסות תאימות, רישום התקנים, אבחון וכלי תחזוקה. ברירות המחדל מתאימות לרוב המשתמשים.</value>
+  </data>
+  <data name="MainWin.SupportDS4WindowsTitle" xml:space="preserve">
+    <value>תמוך ב-DS4Windows</value>
+  </data>
+  <data name="MainWin.SupportDS4WindowsDesc" xml:space="preserve">
+    <value>עזור לממן חומרת בקרים, בדיקות ופיתוח.</value>
+  </data>
+  <data name="ViiperSettings.SectionHeader" xml:space="preserve">
+    <value>תמיכה בבקר וירטואלי VIIPER</value>
+  </data>
+  <data name="ViiperSettings.StatusUnknown" xml:space="preserve">
+    <value>מצב VIIPER לא ידוע</value>
+  </data>
+  <data name="ViiperSettings.InstallRepairButton" xml:space="preserve">
+    <value>התקנה / תיקון VIIPER</value>
+  </data>
+  <data name="ViiperSettings.RequiredOutputsNote" xml:space="preserve">
+    <value>נדרש עבור פלטי VIIPER: DualSense,‏ DualSense Edge,‏ Switch 2 Pro,‏ DS4,‏ Xbox 360 ו-Xbox One / Series דרך USB/IP.</value>
+  </data>
+  <data name="ViiperSettings.PromptMeLabel" xml:space="preserve">
+    <value>הודע לי כש-VIIPER זקוק להתקנה</value>
+  </data>
+  <data name="ViiperSettings.PromptMeTip" xml:space="preserve">
+    <value>כבה אפשרות זו כדי להשתיק הודעות התקנה אוטומטיות של VIIPER. התקנה/תיקון ורענון עדיין זמינים כאן.</value>
+  </data>
+  <data name="Switch2Settings.SectionHeader" xml:space="preserve">
+    <value>בקרי Switch 2 אלחוטיים</value>
+  </data>
+  <data name="Switch2Settings.SyncInstructions" xml:space="preserve">
+    <value>החזק לחוץ את כפתור הסנכרון (sync) בבקר עד שהנוריות מהבהבות, ואז בחר אותו למטה. בקרים שכבר הוספת מתחברים מחדש כשאתה מעיר אותם.</value>
+  </data>
+  <data name="Switch2Settings.AutoJoyConPairingLabel" xml:space="preserve">
+    <value>יחידות Joy-Con מזווגות אוטומטית</value>
+  </data>
+  <data name="Switch2Settings.AutoJoyConPairingTip" xml:space="preserve">
+    <value>מאחד יחידות Joy-Con שמאלית וימנית זמינות לבקר אחד. יחידת Joy-Con בודדת ממשיכה לעבוד בנפרד.</value>
+  </data>
+  <data name="Switch2Settings.DiscoveryStatusDefault" xml:space="preserve">
+    <value>לחץ על רענון כדי לבדוק את מצב גילוי ה-Bluetooth.</value>
+  </data>
+  <data name="Switch2Settings.AddControllerButton" xml:space="preserve">
+    <value>הוסף בקר</value>
+  </data>
+  <data name="Switch2Settings.JoinJoyConsTitle" xml:space="preserve">
+    <value>איחוד יחידות Joy-Con</value>
+  </data>
+  <data name="Switch2Settings.JoinJoyConsDesc" xml:space="preserve">
+    <value>כל Joy-Con פועל בנפרד. כדי לאחד שניים, בחר אותם כאן או השתמש בכפתורי ה-Link בכרטיסייה Controllers.</value>
+  </data>
+  <data name="Switch2Settings.NoUnmatchedJoyCon2" xml:space="preserve">
+    <value>עדיין לא זוהו חיבורי Joy-Con 2 לא מותאמים.</value>
+  </data>
+  <data name="Switch2Settings.LeftJoyCon2Label" xml:space="preserve">
+    <value>Joy-Con 2 שמאלי</value>
+  </data>
+  <data name="Switch2Settings.RightJoyCon2Label" xml:space="preserve">
+    <value>Joy-Con 2 ימני</value>
+  </data>
+  <data name="Switch2Settings.JoinSelectedPairButton" xml:space="preserve">
+    <value>אחד את זוג ה-Joy-Con 2 שנבחר</value>
+  </data>
+  <data name="Switch2Settings.UseSelectedLeftButton" xml:space="preserve">
+    <value>השתמש בשמאלי שנבחר בנפרד</value>
+  </data>
+  <data name="Switch2Settings.UseSelectedRightButton" xml:space="preserve">
+    <value>השתמש בימני שנבחר בנפרד</value>
+  </data>
+  <data name="Switch2Settings.UnmatchedJoyCon2Label" xml:space="preserve">
+    <value>Joy-Con 2 לא מותאם</value>
+  </data>
+  <data name="Switch2Settings.ManualLinkInstructions" xml:space="preserve">
+    <value>לחץ על Link ביד Joy-Con אחת, ואז על Link בשנייה. הבקר הראשון שומר על הפרופיל והפד הווירטואלי שלו.</value>
+  </data>
+  <data name="DsxSettings.SectionHeader" xml:space="preserve">
+    <value>תמיכה במודים למשחקים (DSX)</value>
+  </data>
+  <data name="DsxSettings.EnableLabel" xml:space="preserve">
+    <value>אפשר למודים של המשחק לשלוט בטריגרים ובתאורה</value>
+  </data>
+  <data name="DsxSettings.Description" xml:space="preserve">
+    <value>עבור מודים תואמי DSX על מחשב זה עם DualSense או DualSense Edge. ל-Trigger Lab יש עדיפות על כל טריגר שתפעיל. אפשרות זו לא משדרת audio haptics.</value>
+  </data>
+  <data name="DsxSettings.ConnectionDetailsHeader" xml:space="preserve">
+    <value>פרטי חיבור</value>
+  </data>
+  <data name="DsxSettings.ConnectionDetailsDesc" xml:space="preserve">
+    <value>השתמש באותה כתובת ופורט במוד שלך. רוב המודים משתמשים ב-127.0.0.1 ובפורט 6969. סגור קודם את DSX או כל listener אחר שמשתמש בפורט הזה.</value>
+  </data>
+  <data name="DsxSettings.ThisPcAddressLabel" xml:space="preserve">
+    <value>הכתובת של המחשב הזה</value>
+  </data>
+  <data name="DsxSettings.ApplyRetryButton" xml:space="preserve">
+    <value>החל / נסה שוב</value>
+  </data>
 </root>
