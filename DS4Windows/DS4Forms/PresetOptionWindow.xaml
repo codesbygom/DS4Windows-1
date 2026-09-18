@@ -24,7 +24,7 @@
                         <Button x:Name="yesPresetBtn" Content="Yes" MinWidth="60" TabIndex="1" Click="YesPresetBtn_Click" />
                     </StackPanel>
                     <StackPanel>
-                        <TextBlock Text="{lex:Loc PresetIntrotext}" TextWrapping="Wrap" />
+                        <TextBlock Text="{lex:Loc PresetIntroText}" TextWrapping="Wrap" />
                     </StackPanel>
                 </DockPanel>
             </TabItem>
