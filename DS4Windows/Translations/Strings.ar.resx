@@ -3631,4 +3631,85 @@ Scan Code: يتم تفسير المفاتيح بشكل مختلف. قد يكون
   <data name="Yes" xml:space="preserve">
     <value>نعم</value>
   </data>
+
+  <data name="BridgeShell.AppName" xml:space="preserve"><value>DS4Windows</value></data>
+  <data name="BridgeShell.AppTagline" xml:space="preserve"><value>رفيق يد التحكم</value></data>
+  <data name="BridgeShell.ConnectControllerPrompt" xml:space="preserve"><value>وصّل يد تحكم للبدء</value></data>
+  <data name="BridgeShell.NavigationHeader" xml:space="preserve"><value>التنقل</value></data>
+  <data name="BridgeShell.ProfileEditorTitle" xml:space="preserve"><value>محرر الملفات الشخصية</value></data>
+  <data name="BridgeShell.ProfileBadgeLetter" xml:space="preserve"><value>P</value></data>
+  <data name="BridgeShell.FocusedWorkspace" xml:space="preserve"><value>مساحة عمل مركزة</value></data>
+  <data name="BridgeShell.EditingProfileHeader" xml:space="preserve"><value>تعديل الملف الشخصي</value></data>
+  <data name="BridgeShell.ProfileWorkspaceHeader" xml:space="preserve"><value>مساحة عمل الملف الشخصي</value></data>
+  <data name="BridgeShell.BackToProfiles" xml:space="preserve"><value>العودة إلى الملفات الشخصية</value></data>
+  <data name="BridgeShell.BackToProfilesTip" xml:space="preserve"><value>إلغاء التعديل والعودة إلى قائمة الملفات الشخصية</value></data>
+  <data name="BridgeShell.ButtonMapping" xml:space="preserve"><value>تعيين الأزرار</value></data>
+  <data name="BridgeShell.ButtonMappingTip" xml:space="preserve"><value>الأزرار، العصي، إيماءات اللمس، والاختصارات</value></data>
+  <data name="BridgeShell.SpecialActionsTip" xml:space="preserve"><value>الماكروهات، التشغيل، التبديل، والإجراءات المتعددة</value></data>
+  <data name="BridgeShell.ControllerReadingsTip" xml:space="preserve"><value>المدخلات المباشرة والمعايرة</value></data>
+  <data name="BridgeShell.AxisConfigTip" xml:space="preserve"><value>العصي، الزناد، المناطق الميتة، والمنحنيات</value></data>
+  <data name="BridgeShell.LightbarTip" xml:space="preserve"><value>اللون، البطارية، الوميض، والشحن</value></data>
+  <data name="BridgeShell.TouchpadTip" xml:space="preserve"><value>الفأرة، الإيماءات، التمرير، والتموضع</value></data>
+  <data name="BridgeShell.GyroTip" xml:space="preserve"><value>التصويب الحركي، التوجيه، والتمرير</value></data>
+  <data name="BridgeShell.AudioHapticsTip" xml:space="preserve"><value>تحويل صوت النظام أو التطبيق إلى اهتزاز متقدم</value></data>
+  <data name="BridgeShell.TriggerLabTip" xml:space="preserve"><value>إنشاء تأثيرات زناد تكيفية دائمة</value></data>
+  <data name="BridgeShell.NintendoOptionsTip" xml:space="preserve"><value>اهتزاز HD، الحركة، الفأرة الضوئية، والمعايرة</value></data>
+  <data name="BridgeShell.AdvancedTip" xml:space="preserve"><value>الإخراج، الاهتزاز، زمن الاستجابة، والتوافق</value></data>
+  <data name="BridgeShell.LogTip" xml:space="preserve"><value>أحداث الخدمة دون مغادرة المحرر</value></data>
+
+  <data name="ReadingsControl.LXInput" xml:space="preserve"><value>LX (I): </value></data>
+  <data name="ReadingsControl.LXOutput" xml:space="preserve"><value>LX (O): </value></data>
+  <data name="ReadingsControl.LYInput" xml:space="preserve"><value>LY (I): </value></data>
+  <data name="ReadingsControl.LYOutput" xml:space="preserve"><value>LY (O): </value></data>
+  <data name="ReadingsControl.RXInput" xml:space="preserve"><value>RX (I): </value></data>
+  <data name="ReadingsControl.RXOutput" xml:space="preserve"><value>RX (O): </value></data>
+  <data name="ReadingsControl.RYInput" xml:space="preserve"><value>RY (I): </value></data>
+  <data name="ReadingsControl.RYOutput" xml:space="preserve"><value>RY (O): </value></data>
+  <data name="ReadingsControl.SixAxisXInput" xml:space="preserve"><value>X (I): </value></data>
+  <data name="ReadingsControl.SixAxisXOutput" xml:space="preserve"><value>X (O): </value></data>
+  <data name="ReadingsControl.SixAxisZInput" xml:space="preserve"><value>Z (I): </value></data>
+  <data name="ReadingsControl.SixAxisZOutput" xml:space="preserve"><value>Z (O): </value></data>
+  <data name="ReadingsControl.InputLabel" xml:space="preserve"><value>I: </value></data>
+  <data name="ReadingsControl.OutputLabel" xml:space="preserve"><value>O: </value></data>
+  <data name="ReadingsControl.TouchXLabel" xml:space="preserve"><value>TX: </value></data>
+  <data name="ReadingsControl.TouchYLabel" xml:space="preserve"><value>TY: </value></data>
+
+  <data name="SpecialActionEdit.NameLabel" xml:space="preserve"><value>الاسم:</value></data>
+  <data name="SpecialActionEdit.TriggerHint" xml:space="preserve"><value>حدد الأزرار التي تبدأ هذا الإجراء. يجب الضغط على عدة أزرار معًا.</value></data>
+  <data name="SpecialActionEdit.UnloadTriggerHint" xml:space="preserve"><value>حدد الأزرار التي تنهي هذا الإجراء أو تعيدك إلى الملف الشخصي السابق.</value></data>
+  <data name="SpecialActionEdit.LaunchProgramTab" xml:space="preserve"><value>تشغيل برنامج</value></data>
+  <data name="SpecialActionEdit.SecsLabel" xml:space="preserve"><value>ثوانٍ</value></data>
+  <data name="SpecialActionEdit.ArgumentsLabel" xml:space="preserve"><value>المعطيات</value></data>
+  <data name="SpecialActionEdit.LoadProfileTab" xml:space="preserve"><value>تحميل ملف شخصي</value></data>
+  <data name="SpecialActionEdit.PressKeyTab" xml:space="preserve"><value>ضغط مفتاح</value></data>
+  <data name="SpecialActionEdit.DisBTTab" xml:space="preserve"><value>قطع البلوتوث</value></data>
+  <data name="SpecialActionEdit.CheckBatteryTab" xml:space="preserve"><value>فحص البطارية</value></data>
+  <data name="SpecialActionEdit.MultiActTab" xml:space="preserve"><value>إجراء متعدد</value></data>
+  <data name="SpecialActionEdit.SixaxisWheelTab" xml:space="preserve"><value>عجلة Sixaxis</value></data>
+
+  <data name="ControllerRegOptWin.AcceptMoonlight" xml:space="preserve"><value>قبول وحدات تحكم Moonlight / Sunshine الافتراضية</value></data>
+  <data name="ControllerRegOptWin.AcceptMoonlightTip" xml:space="preserve"><value>قبول كل وحدة تحكم افتراضية مدعومة يتم إنشاؤها أثناء تشغيل Sunshine. تُستثنى دائمًا مخرجات VIIPER الخاصة بـ DS4Windows.</value></data>
+  <data name="ControllerRegOptWin.DS4Tab" xml:space="preserve"><value>DS4</value></data>
+  <data name="ControllerRegOptWin.SwitchProTab" xml:space="preserve"><value>Switch Pro</value></data>
+  <data name="ControllerRegOptWin.JoyConTab" xml:space="preserve"><value>JoyCon</value></data>
+
+  <data name="AutoProfiles.DeviceLabel" xml:space="preserve"><value>الجهاز</value></data>
+  <data name="AutoProfiles.WindowTitlePlaceholder" xml:space="preserve"><value>عنوان النافذة...</value></data>
+  <data name="AutoProfiles.SearchTooltip" xml:space="preserve"><value>البحث حسب الملف الشخصي أو عنوان النافذة أو الملف التنفيذي أو المسار</value></data>
+  <data name="AutoProfiles.DeviceLabelCaps" xml:space="preserve"><value>الجهاز</value></data>
+
+  <data name="About.FakerInputName" xml:space="preserve"><value>FakerInput</value></data>
+  <data name="About.Crc32Name" xml:space="preserve"><value>CRC32</value></data>
+  <data name="About.HNotifyIconName" xml:space="preserve"><value>H.NotifyIcon</value></data>
+  <data name="About.VJoyInterfaceCSName" xml:space="preserve"><value>vJoyInterfaceCS</value></data>
+
+  <data name="MappingLive.AxisPlaceholder" xml:space="preserve"><value>X &#x2014;&#x0a;Y &#x2014;</value></data>
+
+  <data name="Welcome.ViiperInstallHelpText" xml:space="preserve"><value>الواجهة الخلفية المطلوبة لوحدة التحكم الافتراضية. يطلب DS4Windows صلاحيات المسؤول ويثبّت VIIPER إلى جانب usbip-win2 نيابةً عنك.</value></data>
+
+  <data name="RecordBox.CycleProgramsMenu" xml:space="preserve"><value>التنقل بين البرامج</value></data>
+  <data name="RecordBox.FromFileMenu" xml:space="preserve"><value>من ملف...</value></data>
+
+  <data name="Finished" xml:space="preserve"><value>تم</value></data>
+  <data name="PresetOptWin.WinTitle" xml:space="preserve"><value>اختيار إعداد مسبق</value></data>
 </root>

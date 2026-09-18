@@ -35,7 +35,7 @@
                     </Canvas>
                     <StackPanel Margin="7,0,5,0" VerticalAlignment="Center">
                         <TextBlock Text="{lex:Loc MappingLive.LeftStick}" FontWeight="SemiBold" FontSize="10" />
-                        <TextBlock x:Name="leftStickValue" Text="X —&#x0a;Y —" FontSize="10" Margin="0,3,0,0"
+                        <TextBlock x:Name="leftStickValue" Text="{lex:Loc MappingLive.AxisPlaceholder}" FontSize="10" Margin="0,3,0,0"
                                    Foreground="{DynamicResource MutedForegroundColor}" />
                     </StackPanel>
                 </StackPanel>
@@ -48,7 +48,7 @@
                     </Canvas>
                     <StackPanel Margin="7,0,5,0" VerticalAlignment="Center">
                         <TextBlock Text="{lex:Loc MappingLive.RightStick}" FontWeight="SemiBold" FontSize="10" />
-                        <TextBlock x:Name="rightStickValue" Text="X —&#x0a;Y —" FontSize="10" Margin="0,3,0,0"
+                        <TextBlock x:Name="rightStickValue" Text="{lex:Loc MappingLive.AxisPlaceholder}" FontSize="10" Margin="0,3,0,0"
                                    Foreground="{DynamicResource MutedForegroundColor}" />
                     </StackPanel>
                 </StackPanel>
