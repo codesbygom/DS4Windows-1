@@ -924,7 +924,7 @@
     <value>זמן השהיה</value>
   </data>
   <data name="TriggerLab" xml:space="preserve">
-    <value>מעבדת טריגר</value>
+    <value>Trigger Lab</value>
   </data>
   <data name="NintendoOptions" xml:space="preserve">
     <value>אפשרויות נינטנדו</value>
@@ -2314,7 +2314,7 @@ Scan Code: המקשים מתפרשים אחרת. עשוי להידרש במשח�
     <value>שמע המערכת</value>
   </data>
   <data name="AudioHaptics.Title" xml:space="preserve">
-    <value>הפטיקת שמע</value>
+    <value>Audio Haptics</value>
   </data>
   <data name="AutoProfiles.DisplaySwitchVia" xml:space="preserve">
     <value>הצג מעבר פרופיל דרך</value>
