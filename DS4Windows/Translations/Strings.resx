@@ -3659,4 +3659,85 @@ Scan Code: Keys are interpreted differently. May be needed for certain games
   <data name="DsxSettings.ApplyRetryButton" xml:space="preserve">
     <value>Apply / Retry</value>
   </data>
+
+  <data name="BridgeShell.AppName" xml:space="preserve"><value>DS4Windows</value></data>
+  <data name="BridgeShell.AppTagline" xml:space="preserve"><value>Controller companion</value></data>
+  <data name="BridgeShell.ConnectControllerPrompt" xml:space="preserve"><value>Connect a controller to begin</value></data>
+  <data name="BridgeShell.NavigationHeader" xml:space="preserve"><value>NAVIGATION</value></data>
+  <data name="BridgeShell.ProfileEditorTitle" xml:space="preserve"><value>Profile Editor</value></data>
+  <data name="BridgeShell.ProfileBadgeLetter" xml:space="preserve"><value>P</value></data>
+  <data name="BridgeShell.FocusedWorkspace" xml:space="preserve"><value>Focused workspace</value></data>
+  <data name="BridgeShell.EditingProfileHeader" xml:space="preserve"><value>EDITING PROFILE</value></data>
+  <data name="BridgeShell.ProfileWorkspaceHeader" xml:space="preserve"><value>PROFILE WORKSPACE</value></data>
+  <data name="BridgeShell.BackToProfiles" xml:space="preserve"><value>Back to Profiles</value></data>
+  <data name="BridgeShell.BackToProfilesTip" xml:space="preserve"><value>Cancel editing and return to the profile list</value></data>
+  <data name="BridgeShell.ButtonMapping" xml:space="preserve"><value>Button Mapping</value></data>
+  <data name="BridgeShell.ButtonMappingTip" xml:space="preserve"><value>Buttons, sticks, touch gestures, and shortcuts</value></data>
+  <data name="BridgeShell.SpecialActionsTip" xml:space="preserve"><value>Macros, launches, shifts, and multi-actions</value></data>
+  <data name="BridgeShell.ControllerReadingsTip" xml:space="preserve"><value>Live inputs and calibration</value></data>
+  <data name="BridgeShell.AxisConfigTip" xml:space="preserve"><value>Sticks, triggers, dead zones, and curves</value></data>
+  <data name="BridgeShell.LightbarTip" xml:space="preserve"><value>Color, battery, flash, and charging</value></data>
+  <data name="BridgeShell.TouchpadTip" xml:space="preserve"><value>Mouse, gestures, passthrough, and positioning</value></data>
+  <data name="BridgeShell.GyroTip" xml:space="preserve"><value>Motion aiming, steering, and swipes</value></data>
+  <data name="BridgeShell.AudioHapticsTip" xml:space="preserve"><value>Turn system or app audio into advanced haptics</value></data>
+  <data name="BridgeShell.TriggerLabTip" xml:space="preserve"><value>Build persistent adaptive-trigger effects</value></data>
+  <data name="BridgeShell.NintendoOptionsTip" xml:space="preserve"><value>HD rumble, motion, optical mouse, and calibration</value></data>
+  <data name="BridgeShell.AdvancedTip" xml:space="preserve"><value>Output, rumble, latency, and compatibility</value></data>
+  <data name="BridgeShell.LogTip" xml:space="preserve"><value>Service events without leaving the editor</value></data>
+
+  <data name="ReadingsControl.LXInput" xml:space="preserve"><value>LX (I): </value></data>
+  <data name="ReadingsControl.LXOutput" xml:space="preserve"><value>LX (O): </value></data>
+  <data name="ReadingsControl.LYInput" xml:space="preserve"><value>LY (I): </value></data>
+  <data name="ReadingsControl.LYOutput" xml:space="preserve"><value>LY (O): </value></data>
+  <data name="ReadingsControl.RXInput" xml:space="preserve"><value>RX (I): </value></data>
+  <data name="ReadingsControl.RXOutput" xml:space="preserve"><value>RX (O): </value></data>
+  <data name="ReadingsControl.RYInput" xml:space="preserve"><value>RY (I): </value></data>
+  <data name="ReadingsControl.RYOutput" xml:space="preserve"><value>RY (O): </value></data>
+  <data name="ReadingsControl.SixAxisXInput" xml:space="preserve"><value>X (I): </value></data>
+  <data name="ReadingsControl.SixAxisXOutput" xml:space="preserve"><value>X (O): </value></data>
+  <data name="ReadingsControl.SixAxisZInput" xml:space="preserve"><value>Z (I): </value></data>
+  <data name="ReadingsControl.SixAxisZOutput" xml:space="preserve"><value>Z (O): </value></data>
+  <data name="ReadingsControl.InputLabel" xml:space="preserve"><value>I: </value></data>
+  <data name="ReadingsControl.OutputLabel" xml:space="preserve"><value>O: </value></data>
+  <data name="ReadingsControl.TouchXLabel" xml:space="preserve"><value>TX: </value></data>
+  <data name="ReadingsControl.TouchYLabel" xml:space="preserve"><value>TY: </value></data>
+
+  <data name="SpecialActionEdit.NameLabel" xml:space="preserve"><value>Name:</value></data>
+  <data name="SpecialActionEdit.TriggerHint" xml:space="preserve"><value>Check the buttons that start this action. Multiple buttons must be held together.</value></data>
+  <data name="SpecialActionEdit.UnloadTriggerHint" xml:space="preserve"><value>Check the buttons that end this action or return to the previous profile.</value></data>
+  <data name="SpecialActionEdit.LaunchProgramTab" xml:space="preserve"><value>Launch Program</value></data>
+  <data name="SpecialActionEdit.SecsLabel" xml:space="preserve"><value>secs</value></data>
+  <data name="SpecialActionEdit.ArgumentsLabel" xml:space="preserve"><value>Arguments</value></data>
+  <data name="SpecialActionEdit.LoadProfileTab" xml:space="preserve"><value>Load Profile</value></data>
+  <data name="SpecialActionEdit.PressKeyTab" xml:space="preserve"><value>Press Key</value></data>
+  <data name="SpecialActionEdit.DisBTTab" xml:space="preserve"><value>DisBT</value></data>
+  <data name="SpecialActionEdit.CheckBatteryTab" xml:space="preserve"><value>Check Battery</value></data>
+  <data name="SpecialActionEdit.MultiActTab" xml:space="preserve"><value>MultiAct</value></data>
+  <data name="SpecialActionEdit.SixaxisWheelTab" xml:space="preserve"><value>Sixaxis Wheel</value></data>
+
+  <data name="ControllerRegOptWin.AcceptMoonlight" xml:space="preserve"><value>Accept Moonlight / Sunshine virtual controllers</value></data>
+  <data name="ControllerRegOptWin.AcceptMoonlightTip" xml:space="preserve"><value>Accept every supported virtual controller created while Sunshine is running. DS4Windows' own VIIPER outputs are always excluded.</value></data>
+  <data name="ControllerRegOptWin.DS4Tab" xml:space="preserve"><value>DS4</value></data>
+  <data name="ControllerRegOptWin.SwitchProTab" xml:space="preserve"><value>Switch Pro</value></data>
+  <data name="ControllerRegOptWin.JoyConTab" xml:space="preserve"><value>JoyCon</value></data>
+
+  <data name="AutoProfiles.DeviceLabel" xml:space="preserve"><value>Device</value></data>
+  <data name="AutoProfiles.WindowTitlePlaceholder" xml:space="preserve"><value>Window title...</value></data>
+  <data name="AutoProfiles.SearchTooltip" xml:space="preserve"><value>Search by profile, window title, executable, or path</value></data>
+  <data name="AutoProfiles.DeviceLabelCaps" xml:space="preserve"><value>DEVICE</value></data>
+
+  <data name="About.FakerInputName" xml:space="preserve"><value>FakerInput</value></data>
+  <data name="About.Crc32Name" xml:space="preserve"><value>CRC32</value></data>
+  <data name="About.HNotifyIconName" xml:space="preserve"><value>H.NotifyIcon</value></data>
+  <data name="About.VJoyInterfaceCSName" xml:space="preserve"><value>vJoyInterfaceCS</value></data>
+
+  <data name="MappingLive.AxisPlaceholder" xml:space="preserve"><value>X &#x2014;&#x0a;Y &#x2014;</value></data>
+
+  <data name="Welcome.ViiperInstallHelpText" xml:space="preserve"><value>Required virtual-controller backend. DS4Windows requests administrator access and installs VIIPER plus usbip-win2 for you.</value></data>
+
+  <data name="RecordBox.CycleProgramsMenu" xml:space="preserve"><value>Cycle Programs</value></data>
+  <data name="RecordBox.FromFileMenu" xml:space="preserve"><value>From File...</value></data>
+
+  <data name="Finished" xml:space="preserve"><value>Finished</value></data>
+  <data name="PresetOptWin.WinTitle" xml:space="preserve"><value>Select Preset</value></data>
 </root>

@@ -3680,4 +3680,82 @@ Scan Code: کلیدها جور دیگه‌ای تفسیر می‌شن. ممکن�
   <data name="DsxSettings.ApplyRetryButton" xml:space="preserve">
     <value>اعمال / تلاش دوباره</value>
   </data>
+
+  <data name="BridgeShell.AppName" xml:space="preserve"><value>DS4Windows</value></data>
+  <data name="BridgeShell.AppTagline" xml:space="preserve"><value>همراه کنترلر</value></data>
+  <data name="BridgeShell.ConnectControllerPrompt" xml:space="preserve"><value>برای شروع، یک کنترلر وصل کنید</value></data>
+  <data name="BridgeShell.NavigationHeader" xml:space="preserve"><value>ناوبری</value></data>
+  <data name="BridgeShell.ProfileEditorTitle" xml:space="preserve"><value>ویرایشگر پروفایل</value></data>
+  <data name="BridgeShell.ProfileBadgeLetter" xml:space="preserve"><value>P</value></data>
+  <data name="BridgeShell.FocusedWorkspace" xml:space="preserve"><value>فضای کاری متمرکز</value></data>
+  <data name="BridgeShell.EditingProfileHeader" xml:space="preserve"><value>در حال ویرایش پروفایل</value></data>
+  <data name="BridgeShell.ProfileWorkspaceHeader" xml:space="preserve"><value>فضای کاری پروفایل</value></data>
+  <data name="BridgeShell.BackToProfiles" xml:space="preserve"><value>بازگشت به پروفایل‌ها</value></data>
+  <data name="BridgeShell.BackToProfilesTip" xml:space="preserve"><value>لغو ویرایش و بازگشت به فهرست پروفایل‌ها</value></data>
+  <data name="BridgeShell.ButtonMapping" xml:space="preserve"><value>نگاشت دکمه‌ها</value></data>
+  <data name="BridgeShell.ButtonMappingTip" xml:space="preserve"><value>دکمه‌ها، استیک‌ها، ژست‌های لمسی و میانبرها</value></data>
+  <data name="BridgeShell.SpecialActionsTip" xml:space="preserve"><value>ماکروها، اجراها، شیفت‌ها و چندعملیاتی‌ها</value></data>
+  <data name="BridgeShell.ControllerReadingsTip" xml:space="preserve"><value>ورودی‌های زنده و کالیبراسیون</value></data>
+  <data name="BridgeShell.AxisConfigTip" xml:space="preserve"><value>استیک‌ها، تریگرها، ناحیه‌ی مرده و منحنی‌ها</value></data>
+  <data name="BridgeShell.LightbarTip" xml:space="preserve"><value>رنگ، باتری، چشمک‌زدن و شارژ</value></data>
+  <data name="BridgeShell.TouchpadTip" xml:space="preserve"><value>ماوس، ژست‌ها، پاس‌ترو و موقعیت‌دهی</value></data>
+  <data name="BridgeShell.GyroTip" xml:space="preserve"><value>هدف‌گیری حرکتی، فرمان‌دهی و سوایپ‌ها</value></data>
+  <data name="BridgeShell.AudioHapticsTip" xml:space="preserve"><value>تبدیل صدای سیستم یا برنامه به لرزش‌های پیشرفته</value></data>
+  <data name="BridgeShell.TriggerLabTip" xml:space="preserve"><value>ساخت جلوه‌های ماندگار تریگر تطبیقی</value></data>
+  <data name="BridgeShell.NintendoOptionsTip" xml:space="preserve"><value>لرزش HD، حرکت، ماوس نوری و کالیبراسیون</value></data>
+  <data name="BridgeShell.AdvancedTip" xml:space="preserve"><value>خروجی، لرزش، تأخیر و سازگاری</value></data>
+  <data name="BridgeShell.LogTip" xml:space="preserve"><value>رویدادهای سرویس بدون خروج از ویرایشگر</value></data>
+
+  <data name="ReadingsControl.LXInput" xml:space="preserve"><value>LX (I): </value></data>
+  <data name="ReadingsControl.LXOutput" xml:space="preserve"><value>LX (O): </value></data>
+  <data name="ReadingsControl.LYInput" xml:space="preserve"><value>LY (I): </value></data>
+  <data name="ReadingsControl.LYOutput" xml:space="preserve"><value>LY (O): </value></data>
+  <data name="ReadingsControl.RXInput" xml:space="preserve"><value>RX (I): </value></data>
+  <data name="ReadingsControl.RXOutput" xml:space="preserve"><value>RX (O): </value></data>
+  <data name="ReadingsControl.RYInput" xml:space="preserve"><value>RY (I): </value></data>
+  <data name="ReadingsControl.RYOutput" xml:space="preserve"><value>RY (O): </value></data>
+  <data name="ReadingsControl.SixAxisXInput" xml:space="preserve"><value>X (I): </value></data>
+  <data name="ReadingsControl.SixAxisXOutput" xml:space="preserve"><value>X (O): </value></data>
+  <data name="ReadingsControl.SixAxisZInput" xml:space="preserve"><value>Z (I): </value></data>
+  <data name="ReadingsControl.SixAxisZOutput" xml:space="preserve"><value>Z (O): </value></data>
+  <data name="ReadingsControl.InputLabel" xml:space="preserve"><value>I: </value></data>
+  <data name="ReadingsControl.OutputLabel" xml:space="preserve"><value>O: </value></data>
+  <data name="ReadingsControl.TouchXLabel" xml:space="preserve"><value>TX: </value></data>
+  <data name="ReadingsControl.TouchYLabel" xml:space="preserve"><value>TY: </value></data>
+
+  <data name="SpecialActionEdit.NameLabel" xml:space="preserve"><value>نام:</value></data>
+  <data name="SpecialActionEdit.TriggerHint" xml:space="preserve"><value>دکمه‌هایی را که این عملیات را شروع می‌کنند انتخاب کنید. چند دکمه باید همزمان نگه‌داشته شوند.</value></data>
+  <data name="SpecialActionEdit.UnloadTriggerHint" xml:space="preserve"><value>دکمه‌هایی را که این عملیات را پایان می‌دهند یا به پروفایل قبلی برمی‌گردانند انتخاب کنید.</value></data>
+  <data name="SpecialActionEdit.LaunchProgramTab" xml:space="preserve"><value>اجرای برنامه</value></data>
+  <data name="SpecialActionEdit.SecsLabel" xml:space="preserve"><value>ثانیه</value></data>
+  <data name="SpecialActionEdit.ArgumentsLabel" xml:space="preserve"><value>آرگومان‌ها</value></data>
+  <data name="SpecialActionEdit.LoadProfileTab" xml:space="preserve"><value>بارگذاری پروفایل</value></data>
+  <data name="SpecialActionEdit.PressKeyTab" xml:space="preserve"><value>فشردن کلید</value></data>
+  <data name="SpecialActionEdit.DisBTTab" xml:space="preserve"><value>قطع بلوتوث</value></data>
+  <data name="SpecialActionEdit.CheckBatteryTab" xml:space="preserve"><value>بررسی باتری</value></data>
+  <data name="SpecialActionEdit.MultiActTab" xml:space="preserve"><value>چندعملیاتی</value></data>
+  <data name="SpecialActionEdit.SixaxisWheelTab" xml:space="preserve"><value>فرمان Sixaxis</value></data>
+
+  <data name="ControllerRegOptWin.AcceptMoonlight" xml:space="preserve"><value>پذیرش کنترلرهای مجازی Moonlight / Sunshine</value></data>
+  <data name="ControllerRegOptWin.AcceptMoonlightTip" xml:space="preserve"><value>هر کنترلر مجازی پشتیبانی‌شده‌ای که هنگام اجرای Sunshine ساخته می‌شود را بپذیر. خروجی‌های VIIPER خود DS4Windows همیشه مستثنا هستند.</value></data>
+  <data name="ControllerRegOptWin.DS4Tab" xml:space="preserve"><value>DS4</value></data>
+  <data name="ControllerRegOptWin.SwitchProTab" xml:space="preserve"><value>Switch Pro</value></data>
+  <data name="ControllerRegOptWin.JoyConTab" xml:space="preserve"><value>JoyCon</value></data>
+
+  <data name="AutoProfiles.DeviceLabel" xml:space="preserve"><value>دستگاه</value></data>
+  <data name="AutoProfiles.WindowTitlePlaceholder" xml:space="preserve"><value>عنوان پنجره...</value></data>
+  <data name="AutoProfiles.SearchTooltip" xml:space="preserve"><value>جستجو بر اساس پروفایل، عنوان پنجره، فایل اجرایی یا مسیر</value></data>
+  <data name="AutoProfiles.DeviceLabelCaps" xml:space="preserve"><value>دستگاه</value></data>
+
+  <data name="About.FakerInputName" xml:space="preserve"><value>FakerInput</value></data>
+  <data name="About.Crc32Name" xml:space="preserve"><value>CRC32</value></data>
+  <data name="About.HNotifyIconName" xml:space="preserve"><value>H.NotifyIcon</value></data>
+  <data name="About.VJoyInterfaceCSName" xml:space="preserve"><value>vJoyInterfaceCS</value></data>
+
+  <data name="MappingLive.AxisPlaceholder" xml:space="preserve"><value>X &#x2014;&#x0a;Y &#x2014;</value></data>
+
+  <data name="Welcome.ViiperInstallHelpText" xml:space="preserve"><value>بک‌اند کنترلر مجازی مورد نیاز. DS4Windows دسترسی مدیر را درخواست می‌کند و VIIPER به‌همراه usbip-win2 را برای شما نصب می‌کند.</value></data>
+
+  <data name="RecordBox.CycleProgramsMenu" xml:space="preserve"><value>چرخش بین برنامه‌ها</value></data>
+  <data name="RecordBox.FromFileMenu" xml:space="preserve"><value>از فایل...</value></data>
 </root>

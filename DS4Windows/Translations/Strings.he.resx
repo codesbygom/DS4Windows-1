@@ -3625,4 +3625,85 @@ Scan Code: המקשים מתפרשים אחרת. עשוי להידרש במשח�
   <data name="Yes" xml:space="preserve">
     <value>כן</value>
   </data>
+
+  <data name="BridgeShell.AppName" xml:space="preserve"><value>DS4Windows</value></data>
+  <data name="BridgeShell.AppTagline" xml:space="preserve"><value>בן לוויית הבקר</value></data>
+  <data name="BridgeShell.ConnectControllerPrompt" xml:space="preserve"><value>חבר בקר כדי להתחיל</value></data>
+  <data name="BridgeShell.NavigationHeader" xml:space="preserve"><value>ניווט</value></data>
+  <data name="BridgeShell.ProfileEditorTitle" xml:space="preserve"><value>עורך פרופילים</value></data>
+  <data name="BridgeShell.ProfileBadgeLetter" xml:space="preserve"><value>P</value></data>
+  <data name="BridgeShell.FocusedWorkspace" xml:space="preserve"><value>סביבת עבודה ממוקדת</value></data>
+  <data name="BridgeShell.EditingProfileHeader" xml:space="preserve"><value>עריכת פרופיל</value></data>
+  <data name="BridgeShell.ProfileWorkspaceHeader" xml:space="preserve"><value>סביבת עבודה של הפרופיל</value></data>
+  <data name="BridgeShell.BackToProfiles" xml:space="preserve"><value>חזרה לפרופילים</value></data>
+  <data name="BridgeShell.BackToProfilesTip" xml:space="preserve"><value>ביטול העריכה וחזרה לרשימת הפרופילים</value></data>
+  <data name="BridgeShell.ButtonMapping" xml:space="preserve"><value>מיפוי כפתורים</value></data>
+  <data name="BridgeShell.ButtonMappingTip" xml:space="preserve"><value>כפתורים, ג'ויסטיקים, מחוות מגע וקיצורי דרך</value></data>
+  <data name="BridgeShell.SpecialActionsTip" xml:space="preserve"><value>מאקרו, הפעלות, החלפות ופעולות מרובות</value></data>
+  <data name="BridgeShell.ControllerReadingsTip" xml:space="preserve"><value>קלט חי וכיול</value></data>
+  <data name="BridgeShell.AxisConfigTip" xml:space="preserve"><value>ג'ויסטיקים, טריגרים, אזורים מתים ועקומות</value></data>
+  <data name="BridgeShell.LightbarTip" xml:space="preserve"><value>צבע, סוללה, הבהוב וטעינה</value></data>
+  <data name="BridgeShell.TouchpadTip" xml:space="preserve"><value>עכבר, מחוות, מעבר ישיר ומיקום</value></data>
+  <data name="BridgeShell.GyroTip" xml:space="preserve"><value>כיוון תנועתי, היגוי והחלקות</value></data>
+  <data name="BridgeShell.AudioHapticsTip" xml:space="preserve"><value>הפוך שמע מערכת או אפליקציה למשוב מישושי מתקדם</value></data>
+  <data name="BridgeShell.TriggerLabTip" xml:space="preserve"><value>בניית אפקטים קבועים של טריגר אדפטיבי</value></data>
+  <data name="BridgeShell.NintendoOptionsTip" xml:space="preserve"><value>רטט HD, תנועה, עכבר אופטי וכיול</value></data>
+  <data name="BridgeShell.AdvancedTip" xml:space="preserve"><value>פלט, רטט, השהיה ותאימות</value></data>
+  <data name="BridgeShell.LogTip" xml:space="preserve"><value>אירועי שירות מבלי לצאת מהעורך</value></data>
+
+  <data name="ReadingsControl.LXInput" xml:space="preserve"><value>LX (I): </value></data>
+  <data name="ReadingsControl.LXOutput" xml:space="preserve"><value>LX (O): </value></data>
+  <data name="ReadingsControl.LYInput" xml:space="preserve"><value>LY (I): </value></data>
+  <data name="ReadingsControl.LYOutput" xml:space="preserve"><value>LY (O): </value></data>
+  <data name="ReadingsControl.RXInput" xml:space="preserve"><value>RX (I): </value></data>
+  <data name="ReadingsControl.RXOutput" xml:space="preserve"><value>RX (O): </value></data>
+  <data name="ReadingsControl.RYInput" xml:space="preserve"><value>RY (I): </value></data>
+  <data name="ReadingsControl.RYOutput" xml:space="preserve"><value>RY (O): </value></data>
+  <data name="ReadingsControl.SixAxisXInput" xml:space="preserve"><value>X (I): </value></data>
+  <data name="ReadingsControl.SixAxisXOutput" xml:space="preserve"><value>X (O): </value></data>
+  <data name="ReadingsControl.SixAxisZInput" xml:space="preserve"><value>Z (I): </value></data>
+  <data name="ReadingsControl.SixAxisZOutput" xml:space="preserve"><value>Z (O): </value></data>
+  <data name="ReadingsControl.InputLabel" xml:space="preserve"><value>I: </value></data>
+  <data name="ReadingsControl.OutputLabel" xml:space="preserve"><value>O: </value></data>
+  <data name="ReadingsControl.TouchXLabel" xml:space="preserve"><value>TX: </value></data>
+  <data name="ReadingsControl.TouchYLabel" xml:space="preserve"><value>TY: </value></data>
+
+  <data name="SpecialActionEdit.NameLabel" xml:space="preserve"><value>שם:</value></data>
+  <data name="SpecialActionEdit.TriggerHint" xml:space="preserve"><value>בחר את הכפתורים שמתחילים פעולה זו. יש להחזיק כמה כפתורים יחד.</value></data>
+  <data name="SpecialActionEdit.UnloadTriggerHint" xml:space="preserve"><value>בחר את הכפתורים שמסיימים פעולה זו או חוזרים לפרופיל הקודם.</value></data>
+  <data name="SpecialActionEdit.LaunchProgramTab" xml:space="preserve"><value>הפעלת תוכנית</value></data>
+  <data name="SpecialActionEdit.SecsLabel" xml:space="preserve"><value>שניות</value></data>
+  <data name="SpecialActionEdit.ArgumentsLabel" xml:space="preserve"><value>ארגומנטים</value></data>
+  <data name="SpecialActionEdit.LoadProfileTab" xml:space="preserve"><value>טעינת פרופיל</value></data>
+  <data name="SpecialActionEdit.PressKeyTab" xml:space="preserve"><value>לחיצת מקש</value></data>
+  <data name="SpecialActionEdit.DisBTTab" xml:space="preserve"><value>ניתוק בלוטות'</value></data>
+  <data name="SpecialActionEdit.CheckBatteryTab" xml:space="preserve"><value>בדיקת סוללה</value></data>
+  <data name="SpecialActionEdit.MultiActTab" xml:space="preserve"><value>פעולה מרובה</value></data>
+  <data name="SpecialActionEdit.SixaxisWheelTab" xml:space="preserve"><value>הגה Sixaxis</value></data>
+
+  <data name="ControllerRegOptWin.AcceptMoonlight" xml:space="preserve"><value>קבל בקרים וירטואליים של Moonlight / Sunshine</value></data>
+  <data name="ControllerRegOptWin.AcceptMoonlightTip" xml:space="preserve"><value>קבל כל בקר וירטואלי נתמך שנוצר בזמן ש-Sunshine פועל. פלטי VIIPER של DS4Windows עצמו תמיד מוחרגים.</value></data>
+  <data name="ControllerRegOptWin.DS4Tab" xml:space="preserve"><value>DS4</value></data>
+  <data name="ControllerRegOptWin.SwitchProTab" xml:space="preserve"><value>Switch Pro</value></data>
+  <data name="ControllerRegOptWin.JoyConTab" xml:space="preserve"><value>JoyCon</value></data>
+
+  <data name="AutoProfiles.DeviceLabel" xml:space="preserve"><value>התקן</value></data>
+  <data name="AutoProfiles.WindowTitlePlaceholder" xml:space="preserve"><value>כותרת חלון...</value></data>
+  <data name="AutoProfiles.SearchTooltip" xml:space="preserve"><value>חיפוש לפי פרופיל, כותרת חלון, קובץ הפעלה או נתיב</value></data>
+  <data name="AutoProfiles.DeviceLabelCaps" xml:space="preserve"><value>התקן</value></data>
+
+  <data name="About.FakerInputName" xml:space="preserve"><value>FakerInput</value></data>
+  <data name="About.Crc32Name" xml:space="preserve"><value>CRC32</value></data>
+  <data name="About.HNotifyIconName" xml:space="preserve"><value>H.NotifyIcon</value></data>
+  <data name="About.VJoyInterfaceCSName" xml:space="preserve"><value>vJoyInterfaceCS</value></data>
+
+  <data name="MappingLive.AxisPlaceholder" xml:space="preserve"><value>X &#x2014;&#x0a;Y &#x2014;</value></data>
+
+  <data name="Welcome.ViiperInstallHelpText" xml:space="preserve"><value>עמוד קצה נדרש לבקר וירטואלי. DS4Windows מבקש הרשאות מנהל ומתקין עבורך את VIIPER יחד עם usbip-win2.</value></data>
+
+  <data name="RecordBox.CycleProgramsMenu" xml:space="preserve"><value>מעבר בין תוכניות</value></data>
+  <data name="RecordBox.FromFileMenu" xml:space="preserve"><value>מקובץ...</value></data>
+
+  <data name="Finished" xml:space="preserve"><value>סיום</value></data>
+  <data name="PresetOptWin.WinTitle" xml:space="preserve"><value>בחירת הגדרה מוכנה מראש</value></data>
 </root>

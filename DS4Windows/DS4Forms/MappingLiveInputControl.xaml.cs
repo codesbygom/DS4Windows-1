@@ -124,7 +124,8 @@ public partial class MappingLiveInputControl : UserControl
                 Properties.Resources.MLOpenFromConnectedController
         };
         pressedButtons.ToolTip = pressedButtons.Text;
-        leftStickValue.Text = rightStickValue.Text = "X —\nY —";
+        leftStickValue.Text = rightStickValue.Text =
+            DS4WinWPF.Translations.Strings.ResourceManager.GetString("MappingLive.AxisPlaceholder", DS4WinWPF.Translations.Strings.Culture);
         leftTriggerValue.Text = rightTriggerValue.Text = "—";
         leftTriggerMeter.Value = rightTriggerMeter.Value = 0;
         leftStickPlot.Opacity = rightStickPlot.Opacity = 0.35;

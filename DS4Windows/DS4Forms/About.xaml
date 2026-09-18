@@ -736,7 +736,7 @@ dondrakon - Ukranian
                     <StackPanel Margin="4">
                         <Border BorderThickness="1" CornerRadius="10" BorderBrush="{DynamicResource BorderColor}">
                             <StackPanel Margin="8">
-                                <TextBlock Text="HidHide" FontSize="18" FontWeight="Bold" />
+                                <TextBlock Text="{lex:Loc HidHide}" FontSize="18" FontWeight="Bold" />
                                 <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
                                     <TextBlock Text="{lex:Loc About.ProjectUrl}" />
                                     <TextBlock Margin="8,0,0,0">
@@ -753,7 +753,7 @@ dondrakon - Ukranian
 
                         <Border BorderThickness="1" CornerRadius="10" Margin="0,8,0,0" BorderBrush="{DynamicResource BorderColor}">
                             <StackPanel Margin="8">
-                                <TextBlock Text="FakerInput" FontSize="18" FontWeight="Bold" />
+                                <TextBlock Text="{lex:Loc About.FakerInputName}" FontSize="18" FontWeight="Bold" />
                                 <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
                                     <TextBlock Text="{lex:Loc About.ProjectUrl}" />
                                     <TextBlock Margin="8,0,0,0">
@@ -770,7 +770,7 @@ dondrakon - Ukranian
 
                         <Border BorderThickness="1" CornerRadius="10" Margin="0,8,0,0" BorderBrush="{DynamicResource BorderColor}">
                             <StackPanel Margin="8">
-                                <TextBlock Text="CRC32" FontSize="18" FontWeight="Bold" />
+                                <TextBlock Text="{lex:Loc About.Crc32Name}" FontSize="18" FontWeight="Bold" />
                                 <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
                                     <TextBlock Text="{lex:Loc About.ProjectUrl}" />
                                     <TextBlock Margin="8,0,0,0">
@@ -794,7 +794,7 @@ dondrakon - Ukranian
 
                         <Border BorderThickness="1" CornerRadius="10" Margin="0,8,0,0" BorderBrush="{DynamicResource BorderColor}">
                             <StackPanel Margin="8">
-                                <TextBlock Text="H.NotifyIcon" FontSize="18" FontWeight="Bold" />
+                                <TextBlock Text="{lex:Loc About.HNotifyIconName}" FontSize="18" FontWeight="Bold" />
                                 <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
                                     <TextBlock Text="{lex:Loc About.ProjectUrl}" />
                                     <TextBlock Margin="8,0,0,0">
@@ -806,7 +806,7 @@ dondrakon - Ukranian
 
                         <Border BorderThickness="1" CornerRadius="10" Margin="0,8,0,0" BorderBrush="{DynamicResource BorderColor}">
                             <StackPanel Margin="8">
-                                <TextBlock Text="vJoyInterfaceCS" FontSize="18" FontWeight="Bold" />
+                                <TextBlock Text="{lex:Loc About.VJoyInterfaceCSName}" FontSize="18" FontWeight="Bold" />
                                 <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
                                     <TextBlock Text="{lex:Loc About.ProjectUrl}" />
                                     <TextBlock Margin="8,0,0,0">
