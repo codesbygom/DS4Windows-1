@@ -1735,7 +1735,7 @@ Scan Code: کلیدها جور دیگه‌ای تفسیر می‌شن. ممکن�
     <value>فعال</value>
   </data>
   <data name="AudioHaptics.Title" xml:space="preserve">
-    <value>Audio Haptics</value>
+    <value>هپتیک صوتی</value>
   </data>
   <data name="AudioHaptics.Subtitle" xml:space="preserve">
     <value>فیدبک کنترلر بر پایه‌ی صدا</value>
@@ -2526,7 +2526,7 @@ Scan Code: کلیدها جور دیگه‌ای تفسیر می‌شن. ممکن�
     <value>زمان تأخیر</value>
   </data>
   <data name="TriggerLab" xml:space="preserve">
-    <value>Trigger Lab</value>
+    <value>آزمایشگاه ماشه</value>
   </data>
   <data name="NintendoOptions" xml:space="preserve">
     <value>گزینه‌های نینتندو</value>

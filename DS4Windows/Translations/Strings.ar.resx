@@ -930,7 +930,7 @@ Gryo معين كفأرة</value>
     <value>وقت التأخير</value>
   </data>
   <data name="TriggerLab" xml:space="preserve">
-    <value>Trigger Lab</value>
+    <value>مختبر الضغط</value>
   </data>
   <data name="NintendoOptions" xml:space="preserve">
     <value>خيارات Nintendo</value>
@@ -2320,7 +2320,7 @@ Scan Code: يتم تفسير المفاتيح بشكل مختلف. قد يكون
     <value>صوت النظام</value>
   </data>
   <data name="AudioHaptics.Title" xml:space="preserve">
-    <value>Audio Haptics</value>
+    <value>استجابة لمسية صوتية</value>
   </data>
   <data name="AutoProfiles.DisplaySwitchVia" xml:space="preserve">
     <value>عرض تبديل الملف التعريفي عبر</value>
